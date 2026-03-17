@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"/c/Users/carso/Batch Apps/BatchFolio\" && npx create-next-app@latest . --js --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" 2>&1)",
+      "Bash(cd \"/c/Users/carso/Batch Apps/BatchFolio\" && npx create-next-app@latest . --js --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --yes 2>&1 || \\\\\nnpx create-next-app@latest batchfolio-temp --js --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" 2>&1)",
+      "Bash(cd \"/c/Users/carso/Batch Apps/BatchFolio\" && npm install 2>&1)",
+      "Bash(cd \"/c/Users/carso/Batch Apps/BatchFolio\" && npm run build 2>&1)"
+    ]
+  }
+}

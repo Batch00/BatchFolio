@@ -1,0 +1,13 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/api/stock/chart/route": "/api/stock/chart",
+  "/api/stock/fundamentals/route": "/api/stock/fundamentals",
+  "/api/stock/quote/route": "/api/stock/quote",
+  "/(auth)/login/page": "/login",
+  "/(auth)/signup/page": "/signup",
+  "/(dashboard)/portfolio/page": "/portfolio",
+  "/(dashboard)/accounts/page": "/accounts",
+  "/(dashboard)/watchlist/page": "/watchlist",
+  "/(dashboard)/page": "/",
+  "/(dashboard)/stock/[ticker]/page": "/stock/[ticker]"
+}
