@@ -25,7 +25,7 @@ import { Trash2, Plus, ChevronDown, ChevronRight } from 'lucide-react'
 const fmt = (v) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v ?? 0)
 
-export default function AccountsPanel({ onOpenDetail }) {
+export default function AccountsTab({ onOpenDrawer }) {
   const supabase = createClient()
   const [accounts, setAccounts] = useState([])
   const [holdings, setHoldings] = useState({})
@@ -34,7 +34,6 @@ export default function AccountsPanel({ onOpenDetail }) {
   const [error, setError] = useState(null)
   const [expanded, setExpanded] = useState({})
 
-  // Add account dialog
   const [accDialog, setAccDialog] = useState(false)
   const [accName, setAccName] = useState('')
   const [accProvider, setAccProvider] = useState('')
@@ -42,7 +41,6 @@ export default function AccountsPanel({ onOpenDetail }) {
   const [accSaving, setAccSaving] = useState(false)
   const [accError, setAccError] = useState(null)
 
-  // Add holding dialog
   const [holdDialog, setHoldDialog] = useState(false)
   const [holdAccountId, setHoldAccountId] = useState(null)
   const [holdTicker, setHoldTicker] = useState('')
@@ -60,18 +58,26 @@ export default function AccountsPanel({ onOpenDetail }) {
       .select('*')
       .order('created_at', { ascending: false })
 
-    if (accErr) { setError(accErr.message); setLoading(false); return }
+    if (accErr) {
+      setError(accErr.message)
+      setLoading(false)
+      return
+    }
 
     const { data: allHoldings, error: holdErr } = await supabase
       .from('holdings')
       .select('*')
       .order('ticker')
 
-    if (holdErr) { setError(holdErr.message); setLoading(false); return }
+    if (holdErr) {
+      setError(holdErr.message)
+      setLoading(false)
+      return
+    }
 
     const grouped = {}
-    for (const acc of (accs ?? [])) grouped[acc.id] = []
-    for (const h of (allHoldings ?? [])) {
+    for (const acc of accs ?? []) grouped[acc.id] = []
+    for (const h of allHoldings ?? []) {
       if (!grouped[h.account_id]) grouped[h.account_id] = []
       grouped[h.account_id].push(h)
     }
@@ -82,11 +88,13 @@ export default function AccountsPanel({ onOpenDetail }) {
         fetch(`/api/stock/quote?ticker=${t}`)
           .then((r) => r.json())
           .then((q) => ({ t, q }))
-          .catch(() => ({ t, q: null }))
-      )
+          .catch(() => ({ t, q: null })),
+      ),
     )
     const priceMap = {}
-    priceResults.forEach(({ t, q }) => { if (q) priceMap[t] = q })
+    priceResults.forEach(({ t, q }) => {
+      if (q) priceMap[t] = q
+    })
 
     setAccounts(accs ?? [])
     setHoldings(grouped)
@@ -94,12 +102,14 @@ export default function AccountsPanel({ onOpenDetail }) {
     setLoading(false)
   }, [])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   function accountTotal(accountId) {
     return (holdings[accountId] ?? []).reduce(
       (sum, h) => sum + h.shares * (prices[h.ticker]?.price ?? 0),
-      0
+      0,
     )
   }
 
@@ -107,7 +117,9 @@ export default function AccountsPanel({ onOpenDetail }) {
     e.preventDefault()
     setAccSaving(true)
     setAccError(null)
-    const { data: { user } } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
     const { error: err } = await supabase.from('accounts').insert({
       user_id: user.id,
       name: accName.trim(),
@@ -118,7 +130,9 @@ export default function AccountsPanel({ onOpenDetail }) {
       setAccError(err.message)
     } else {
       setAccDialog(false)
-      setAccName(''); setAccProvider(''); setAccType('brokerage')
+      setAccName('')
+      setAccProvider('')
+      setAccType('brokerage')
       await loadData()
     }
     setAccSaving(false)
@@ -132,7 +146,9 @@ export default function AccountsPanel({ onOpenDetail }) {
 
   function openAddHolding(accountId) {
     setHoldAccountId(accountId)
-    setHoldTicker(''); setHoldShares(''); setHoldCost('')
+    setHoldTicker('')
+    setHoldShares('')
+    setHoldCost('')
     setHoldError(null)
     setHoldDialog(true)
   }
@@ -167,82 +183,104 @@ export default function AccountsPanel({ onOpenDetail }) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="p-4">
       {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b border-[#21262d] flex items-center justify-between flex-shrink-0">
+      <div className="flex items-center justify-between mb-4">
         <p className="text-xs text-[#7d8590] uppercase tracking-wider">Accounts</p>
         <button
-          onClick={() => { setAccError(null); setAccDialog(true) }}
-          className="text-xs text-[#10b981] hover:text-[#34d399] transition-colors flex items-center gap-1"
+          onClick={() => {
+            setAccError(null)
+            setAccDialog(true)
+          }}
+          className="flex items-center gap-1 text-xs text-[#10b981] hover:text-[#34d399] transition-colors border border-[#10b981]/40 rounded px-2.5 py-1"
         >
           <Plus className="h-3 w-3" />
-          Add
+          Add Account
         </button>
       </div>
 
-      {/* List */}
-      <div className="flex-1 overflow-y-auto">
-        {error && <p className="p-3 text-xs text-[#f87171]">{error}</p>}
-        {loading ? (
-          <div className="p-3 space-y-2">
-            {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-14" />)}
-          </div>
-        ) : accounts.length === 0 ? (
-          <p className="p-4 text-sm text-[#7d8590]">No accounts yet.</p>
-        ) : (
-          <div>
-            {accounts.map((acc) => {
-              const total = accountTotal(acc.id)
-              const holdList = holdings[acc.id] ?? []
-              const isExpanded = expanded[acc.id]
+      {error && <p className="text-xs text-[#f87171] mb-4">{error}</p>}
 
-              return (
-                <div key={acc.id} className="border-b border-[#21262d]">
-                  {/* Account row */}
-                  <div className="flex items-center px-4 py-3">
-                    <button
-                      onClick={() => toggleExpand(acc.id)}
-                      className="flex-1 flex items-center gap-2 text-left min-w-0"
-                    >
-                      {isExpanded ? (
-                        <ChevronDown className="h-3.5 w-3.5 text-[#7d8590] flex-shrink-0" />
-                      ) : (
-                        <ChevronRight className="h-3.5 w-3.5 text-[#7d8590] flex-shrink-0" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-[#e6edf3] truncate">{acc.name}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs text-[#7d8590]">{acc.provider}</span>
-                          <Badge variant="secondary" className="text-xs py-0 h-4">{acc.type}</Badge>
-                        </div>
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} className="h-16" />
+          ))}
+        </div>
+      ) : accounts.length === 0 ? (
+        <p className="text-sm text-[#7d8590]">No accounts yet.</p>
+      ) : (
+        <div className="space-y-3">
+          {accounts.map((acc) => {
+            const total = accountTotal(acc.id)
+            const holdList = holdings[acc.id] ?? []
+            const isExpanded = expanded[acc.id]
+
+            return (
+              <div
+                key={acc.id}
+                className="bg-[#161b22] border border-[#21262d] rounded-md overflow-hidden"
+              >
+                {/* Account row */}
+                <div className="flex items-center px-4 py-3">
+                  <button
+                    onClick={() => toggleExpand(acc.id)}
+                    className="flex-1 flex items-center gap-2 text-left min-w-0"
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="h-3.5 w-3.5 text-[#7d8590] flex-shrink-0" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5 text-[#7d8590] flex-shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-[#e6edf3] truncate">{acc.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-[#7d8590]">{acc.provider}</span>
+                        <Badge variant="secondary" className="text-xs py-0 h-4">
+                          {acc.type}
+                        </Badge>
                       </div>
+                    </div>
+                  </button>
+                  <div className="flex items-center gap-3 ml-2 flex-shrink-0">
+                    <span className="font-mono text-sm text-[#e6edf3]">{fmt(total)}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        deleteAccount(acc.id)
+                      }}
+                      className="text-[#7d8590] hover:text-[#f87171] transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
-                    <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                      <span className="font-mono text-sm text-[#e6edf3]">{fmt(total)}</span>
+                  </div>
+                </div>
+
+                {/* Expanded holdings table */}
+                {isExpanded && (
+                  <div className="border-t border-[#21262d] bg-[#0d1117]">
+                    <div className="flex justify-end px-4 py-2">
                       <button
-                        onClick={(e) => { e.stopPropagation(); deleteAccount(acc.id) }}
-                        className="text-[#7d8590] hover:text-[#f87171] transition-colors"
+                        onClick={() => openAddHolding(acc.id)}
+                        className="text-xs text-[#10b981] hover:text-[#34d399] transition-colors flex items-center gap-1"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Plus className="h-3 w-3" />
+                        Add Holding
                       </button>
                     </div>
-                  </div>
-
-                  {/* Expanded holdings */}
-                  {isExpanded && (
-                    <div className="bg-[#161b22] border-t border-[#21262d] px-4 py-2">
-                      <div className="flex justify-end mb-2">
-                        <button
-                          onClick={() => openAddHolding(acc.id)}
-                          className="text-xs text-[#10b981] hover:text-[#34d399] transition-colors flex items-center gap-1"
-                        >
-                          <Plus className="h-3 w-3" />
-                          Add Holding
-                        </button>
-                      </div>
-                      {holdList.length === 0 ? (
-                        <p className="text-xs text-[#7d8590] py-1">No holdings in this account.</p>
-                      ) : (
+                    {holdList.length === 0 ? (
+                      <p className="text-xs text-[#7d8590] px-4 pb-3">No holdings in this account.</p>
+                    ) : (
+                      <div className="px-4 pb-3">
+                        <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto] gap-x-4 gap-y-0 text-[10px] text-[#7d8590] uppercase tracking-wider mb-1 px-0">
+                          <span>Ticker</span>
+                          <span></span>
+                          <span className="text-right">Shares</span>
+                          <span className="text-right">Avg Cost</span>
+                          <span className="text-right">Live Price</span>
+                          <span className="text-right">Value</span>
+                          <span className="text-right">Gain%</span>
+                        </div>
                         <div className="space-y-0.5">
                           {holdList.map((h) => {
                             const livePrice = prices[h.ticker]?.price ?? 0
@@ -252,23 +290,36 @@ export default function AccountsPanel({ onOpenDetail }) {
                             const gainPct = costBasis > 0 ? (gainLoss / costBasis) * 100 : 0
                             const positive = gainLoss >= 0
                             return (
-                              <div key={h.id} className="flex items-center justify-between py-1.5">
+                              <div
+                                key={h.id}
+                                className="grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto] gap-x-4 items-center py-1.5 border-b border-[#21262d] last:border-0"
+                              >
                                 <button
-                                  onClick={() => onOpenDetail({ type: 'stock', ticker: h.ticker })}
-                                  className="text-left min-w-0"
+                                  onClick={() => onOpenDrawer(h.ticker)}
+                                  className="font-mono text-xs text-[#10b981] hover:text-[#34d399] transition-colors w-12"
                                 >
-                                  <p className="font-mono text-xs text-[#10b981] hover:text-[#34d399] transition-colors">
-                                    {h.ticker}
-                                  </p>
-                                  <p className="text-xs text-[#7d8590]">{h.shares} shares</p>
+                                  {h.ticker}
                                 </button>
-                                <div className="flex items-center gap-2 ml-2">
-                                  <div className="text-right">
-                                    <p className="font-mono text-xs text-[#e6edf3]">{fmt(value)}</p>
-                                    <p className={`font-mono text-xs ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}>
-                                      {positive ? '+' : ''}{gainPct.toFixed(2)}%
-                                    </p>
-                                  </div>
+                                <span />
+                                <span className="font-mono text-xs text-[#7d8590] text-right">
+                                  {h.shares}
+                                </span>
+                                <span className="font-mono text-xs text-[#7d8590] text-right">
+                                  {fmt(h.avg_cost_basis)}
+                                </span>
+                                <span className="font-mono text-xs text-[#e6edf3] text-right">
+                                  {fmt(livePrice)}
+                                </span>
+                                <span className="font-mono text-xs text-[#e6edf3] text-right">
+                                  {fmt(value)}
+                                </span>
+                                <div className="flex items-center gap-2 justify-end">
+                                  <span
+                                    className={`font-mono text-xs ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}
+                                  >
+                                    {positive ? '+' : ''}
+                                    {gainPct.toFixed(2)}%
+                                  </span>
                                   <button
                                     onClick={() => deleteHolding(h.id)}
                                     className="text-[#7d8590] hover:text-[#f87171] transition-colors"
@@ -280,15 +331,15 @@ export default function AccountsPanel({ onOpenDetail }) {
                             )
                           })}
                         </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Add Account Dialog */}
       <Dialog open={accDialog} onOpenChange={setAccDialog}>

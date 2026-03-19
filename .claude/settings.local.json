@@ -6,7 +6,9 @@
       "Bash(cd \"/c/Users/carso/Batch Apps/BatchFolio\" && npm install 2>&1)",
       "Bash(cd \"/c/Users/carso/Batch Apps/BatchFolio\" && npm run build 2>&1)",
       "Bash(cd:*)",
-      "Bash(tail:*)"
+      "Bash(tail:*)",
+      "Bash(echo Done:*)",
+      "Bash(cd \"C:\\\\Users\\\\carso\\\\Batch Apps\\\\BatchFolio\" && npm run build 2>&1)"
     ]
   }
 }
