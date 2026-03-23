@@ -7,8 +7,8 @@ const fmtPct = (v) => (v == null ? '--' : `${v >= 0 ? '+' : ''}${Number(v).toFix
 
 export default function WatchlistWidget({ loading, watchlist, onOpenDrawer }) {
   return (
-    <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4">
-      <p className="text-[10px] uppercase tracking-widest text-[#7d8590] font-mono mb-3">
+    <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4 h-full">
+      <p className="text-[10px] uppercase text-[#7d8590] font-mono mb-[10px]" style={{ letterSpacing: '0.08em' }}>
         Watchlist
       </p>
 
@@ -19,7 +19,9 @@ export default function WatchlistWidget({ loading, watchlist, onOpenDrawer }) {
           ))}
         </div>
       ) : watchlist.length === 0 ? (
-        <p className="text-xs text-[#7d8590]">Watchlist is empty.</p>
+        <div className="min-h-[80px] flex items-center justify-center">
+          <p className="text-xs text-[#7d8590]">Watchlist is empty.</p>
+        </div>
       ) : (
         <div className="divide-y divide-[#21262d]">
           {watchlist.map((w) => {

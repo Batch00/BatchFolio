@@ -26,8 +26,8 @@ export default function NetWorthWidget({
   dayPositive,
 }) {
   return (
-    <div className="bg-[#161b22] border border-[#10b981]/40 rounded-md p-4">
-      <p className="text-[10px] uppercase tracking-widest text-[#7d8590] font-mono mb-2">
+    <div className="bg-[#161b22] border border-[#10b981]/40 rounded-md p-4 h-full">
+      <p className="text-[10px] uppercase text-[#7d8590] font-mono mb-[10px]" style={{ letterSpacing: '0.08em' }}>
         Net Worth
       </p>
 

@@ -134,11 +134,11 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   }))
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="px-6 py-4 min-h-[calc(100vh-48px)] flex flex-col gap-4">
       {error && <p className="text-xs text-[#f87171]">{error}</p>}
 
-      {/* Hero row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Hero row: net worth | trend chart (2x) | allocation */}
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_1fr] gap-4">
         <NetWorthWidget
           loading={loading}
           netWorth={netWorth}

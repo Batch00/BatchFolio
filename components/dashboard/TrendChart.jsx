@@ -39,9 +39,9 @@ export default function TrendChart({ loading, snapshots }) {
   const chartData = filtered.map((s) => ({ date: s.date, netWorth: s.net_worth }))
 
   return (
-    <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4">
+    <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4 h-full flex flex-col">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-[10px] uppercase tracking-widest text-[#7d8590] font-mono">
+        <p className="text-[10px] uppercase text-[#7d8590] font-mono" style={{ letterSpacing: '0.08em' }}>
           Net Worth Trend
         </p>
         <div className="flex gap-0.5 bg-[#21262d] rounded p-0.5">
@@ -60,13 +60,13 @@ export default function TrendChart({ loading, snapshots }) {
       </div>
 
       {loading ? (
-        <Skeleton className="h-40" />
+        <Skeleton className="h-40 flex-1" />
       ) : chartData.length === 0 ? (
-        <div className="h-40 flex items-center justify-center text-xs text-[#7d8590]">
+        <div className="flex-1 min-h-[160px] flex items-center justify-center text-xs text-[#7d8590]">
           No snapshots yet.
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={160}>
+        <ResponsiveContainer width="100%" height={160} className="flex-1">
           <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">

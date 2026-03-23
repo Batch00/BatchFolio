@@ -39,6 +39,11 @@ const fmt = (v) =>
     ? '--'
     : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v)
 
+const fmtMobile = (v) =>
+  v == null
+    ? '--'
+    : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
+
 export default function TopBar({
   activeTab,
   onTabChange,
@@ -165,46 +170,50 @@ export default function TopBar({
       : null
 
   return (
-    <div className="h-12 flex items-center px-4 border-b border-[#21262d] bg-[#0d1117] flex-shrink-0 sticky top-0 z-30">
-      {/* Logo */}
-      <div className="flex items-center mr-5 flex-shrink-0">
-        <span className="text-[#7d8590] text-[15px] font-medium">Batch</span>
-        <span className="text-[#10b981] text-[15px] font-medium">Folio</span>
+    <div className="h-12 grid grid-cols-[1fr_auto_1fr] items-center px-4 border-b border-[#21262d] bg-[#0d1117] flex-shrink-0 sticky top-0 z-30">
+      {/* Left: Logo + Tabs */}
+      <div className="flex items-center min-w-0">
+        <div className="flex items-center mr-4 flex-shrink-0">
+          <span className="text-[#7d8590] text-[15px] font-medium">Batch</span>
+          <span className="text-[#10b981] text-[15px] font-medium">Folio</span>
+        </div>
+
+        {/* Tabs - desktop labels, mobile icons */}
+        <div className="flex items-center flex-shrink-0">
+          {TABS.map(({ id, label, icon: Icon }) => {
+            const active = activeTab === id
+            return (
+              <button
+                key={id}
+                onClick={() => onTabChange(id)}
+                className={`h-12 flex items-center gap-1.5 px-3 border-b-2 text-[11px] uppercase tracking-widest font-medium transition-colors ${
+                  active
+                    ? 'border-[#10b981] text-[#10b981]'
+                    : 'border-transparent text-[#7d8590] hover:text-[#e6edf3]'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5 sm:hidden" />
+                <span className="hidden sm:inline">{label}</span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
-      {/* Tabs - desktop labels, mobile icons */}
-      <div className="flex items-center flex-shrink-0">
-        {TABS.map(({ id, label, icon: Icon }) => {
-          const active = activeTab === id
-          return (
-            <button
-              key={id}
-              onClick={() => onTabChange(id)}
-              className={`h-12 flex items-center gap-1.5 px-3 border-b-2 text-[11px] uppercase tracking-widest font-medium transition-colors ${
-                active
-                  ? 'border-[#10b981] text-[#10b981]'
-                  : 'border-transparent text-[#7d8590] hover:text-[#e6edf3]'
-              }`}
-            >
-              <Icon className="h-3.5 w-3.5 sm:hidden" />
-              <span className="hidden sm:inline">{label}</span>
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Center: persistent net worth */}
-      <div className="flex-1 flex items-center justify-center gap-2 min-w-0">
+      {/* Center: persistent net worth - truly centered via grid */}
+      <div className="flex items-center justify-center gap-2">
         {netWorth != null ? (
           <>
-            <span className="font-mono text-sm font-semibold text-[#e6edf3] truncate">
-              {fmt(netWorth)}
+            <span className="font-mono font-semibold text-[#e6edf3]" style={{ fontSize: 14 }}>
+              <span className="sm:hidden">{fmtMobile(netWorth)}</span>
+              <span className="hidden sm:inline">{fmt(netWorth)}</span>
             </span>
             {netWorthChange != null && (
               <span
-                className={`font-mono text-xs flex-shrink-0 ${
+                className={`font-mono flex-shrink-0 ${
                   netWorthChangePositive ? 'text-[#34d399]' : 'text-[#f87171]'
                 }`}
+                style={{ fontSize: 12 }}
               >
                 {netWorthChangePositive ? '+' : ''}
                 {fmt(netWorthChange)}
@@ -217,13 +226,13 @@ export default function TopBar({
       </div>
 
       {/* Right actions */}
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex items-center justify-end gap-2">
         {/* LIVE indicator */}
         <div className="hidden sm:flex items-center gap-1.5 border border-[#21262d] rounded px-2 py-1">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10b981] opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#10b981]" />
-          </span>
+          <span
+            className="inline-flex h-2 w-2 rounded-full bg-[#10b981]"
+            style={{ animation: 'live-pulse 2s infinite' }}
+          />
           <span className="text-[10px] text-[#7d8590] uppercase tracking-wider">Live</span>
         </div>
 

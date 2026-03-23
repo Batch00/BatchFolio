@@ -110,20 +110,20 @@ export default function StockDrawer({ ticker, onClose }) {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/40"
+        className="fixed inset-0 z-40"
+        style={{ background: 'rgba(0,0,0,0.4)' }}
         onClick={onClose}
       />
 
-      {/* Drawer */}
-      <div
-        className="fixed right-0 top-0 h-full z-50 w-full sm:w-[300px] flex flex-col overflow-y-auto"
-        style={{
-          background: '#161b22',
-          borderLeft: '1px solid #10b981',
-        }}
-      >
+      {/* Drawer - mobile: bottom sheet, desktop: right panel (via .stock-drawer CSS class) */}
+      <div className="stock-drawer">
+        {/* Mobile drag handle */}
+        <div className="flex justify-center pt-3 pb-1 flex-shrink-0 sm:hidden">
+          <div style={{ width: 40, height: 4, borderRadius: 2, background: '#21262d' }} />
+        </div>
+
         {/* Header */}
-        <div className="px-4 pt-4 pb-3 border-b border-[#21262d] flex-shrink-0">
+        <div className="px-5 pt-4 pb-3 border-b border-[#21262d] flex-shrink-0">
           <div className="flex items-start justify-between mb-3">
             <div>
               {loading ? (
@@ -140,7 +140,8 @@ export default function StockDrawer({ ticker, onClose }) {
             </div>
             <button
               onClick={onClose}
-              className="text-[#7d8590] hover:text-[#e6edf3] transition-colors ml-4 mt-0.5"
+              className="text-[#7d8590] hover:text-[#e6edf3] transition-colors ml-4 flex items-center justify-center"
+              style={{ minWidth: 32, minHeight: 32 }}
             >
               <X className="h-4 w-4" />
             </button>
@@ -173,7 +174,7 @@ export default function StockDrawer({ ticker, onClose }) {
         </div>
 
         {/* Chart */}
-        <div className="px-4 pt-3 flex-shrink-0">
+        <div className="px-5 pt-3 flex-shrink-0">
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs text-[#7d8590]">Price</p>
             <div className="flex gap-0.5 bg-[#21262d] rounded p-0.5">
@@ -191,7 +192,7 @@ export default function StockDrawer({ ticker, onClose }) {
             </div>
           </div>
           {chartLoading ? (
-            <Skeleton className="h-36" />
+            <Skeleton className="h-[120px]" />
           ) : (
             <StockPriceChart candles={candles} />
           )}
@@ -199,8 +200,8 @@ export default function StockDrawer({ ticker, onClose }) {
 
         {/* Your position */}
         {!loading && position && (
-          <div className="px-4 pt-4">
-            <p className="text-xs text-[#7d8590] uppercase tracking-wider mb-2">Your Position</p>
+          <div className="px-5 pt-4 border-t border-[#21262d]">
+            <p className="text-[10px] uppercase tracking-[0.08em] text-[#7d8590] mb-[10px]">Your Position</p>
             <div className="bg-[#0d1117] border border-[#21262d] rounded-md px-3 py-1">
               <StatRow
                 label="Shares"
@@ -224,8 +225,8 @@ export default function StockDrawer({ ticker, onClose }) {
 
         {/* Key stats */}
         {!loading && (
-          <div className="px-4 pt-4 pb-6">
-            <p className="text-xs text-[#7d8590] uppercase tracking-wider mb-2">Key Stats</p>
+          <div className="px-5 pt-4 pb-6">
+            <p className="text-[10px] uppercase tracking-[0.08em] text-[#7d8590] mb-[10px]">Key Stats</p>
             <div className="bg-[#0d1117] border border-[#21262d] rounded-md px-3 py-1">
               <StatRow label="Market Cap" value={fmtMarketCap(fundamentals?.marketCap)} />
               <StatRow
