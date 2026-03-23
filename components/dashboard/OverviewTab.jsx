@@ -21,6 +21,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   const [prices, setPrices] = useState({})
   const [sparklines, setSparklines] = useState({})
   const [watchlist, setWatchlist] = useState([])
+  const [liveLiabilities, setLiveLiabilities] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -28,10 +29,11 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     setLoading(true)
     setError(null)
 
-    const [snapshotsRes, holdingsRes, watchlistRes] = await Promise.all([
+    const [snapshotsRes, holdingsRes, watchlistRes, liabRes] = await Promise.all([
       supabase.from('net_worth_snapshots').select('*').order('date', { ascending: true }),
       supabase.from('holdings').select('*'),
       supabase.from('watchlist').select('*').order('added_at', { ascending: false }),
+      supabase.from('liabilities').select('balance'),
     ])
 
     if (snapshotsRes.error) {
@@ -63,16 +65,23 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     setHoldings(allHoldings)
     setPrices(priceMap)
     setWatchlist(wlItems)
+    setLiveLiabilities(liabRes.data ?? [])
     setLoading(false)
 
-    // Update top bar net worth
-    const latest = (snapshotsRes.data ?? []).slice(-1)[0]
-    const netWorth = latest?.net_worth ?? null
+    // Update top bar net worth using live liabilities total
+    const latestSnap = (snapshotsRes.data ?? []).slice(-1)[0]
+    const liveLiabTotal = (liabRes.data ?? []).reduce((sum, l) => sum + l.balance, 0)
+    const topBarNetWorth = latestSnap != null ? (latestSnap.total_assets - liveLiabTotal) : null
     const dayChange = allHoldings.reduce(
       (sum, h) => sum + h.shares * (priceMap[h.ticker]?.change ?? 0),
       0,
     )
-    onDataLoaded?.({ value: netWorth, change: dayChange, changePositive: dayChange >= 0 })
+    onDataLoaded?.({
+      value: topBarNetWorth,
+      change: dayChange,
+      changePositive: dayChange >= 0,
+      liveLiabilitiesTotal: liveLiabTotal,
+    })
 
     // Fetch sparklines in background
     if (holdingTickers.length > 0) {
@@ -99,8 +108,8 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
 
   const latest = snapshots[snapshots.length - 1]
   const totalAssets = latest?.total_assets ?? 0
-  const totalLiabilities = latest?.total_liabilities ?? 0
-  const netWorth = latest?.net_worth ?? 0
+  const liveLiabilitiesTotal = liveLiabilities.reduce((sum, l) => sum + l.balance, 0)
+  const netWorth = latest != null ? totalAssets - liveLiabilitiesTotal : 0
 
   const dayChange = holdings.reduce(
     (sum, h) => sum + h.shares * (prices[h.ticker]?.change ?? 0),
@@ -168,7 +177,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
           loading={loading}
           netWorth={netWorth}
           totalAssets={totalAssets}
-          totalLiabilities={totalLiabilities}
+          totalLiabilities={liveLiabilitiesTotal}
           dayChange={dayChange}
           dayChangePct={dayChangePct}
           dayPositive={dayPositive}

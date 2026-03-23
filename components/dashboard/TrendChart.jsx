@@ -13,16 +13,24 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 const RANGES = ['30D', '90D', '1Y']
 
-function formatDate(dateStr) {
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+function formatDateShort(dateStr) {
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function formatDateFull(dateStr) {
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
 }
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-[#161b22] border border-[#21262d] rounded-md px-3 py-2">
-      <p className="text-xs text-[#7d8590] mb-1">{formatDate(label)}</p>
-      <p className="text-sm font-mono text-[#10b981]">
+      <p className="text-xs text-[#7d8590] mb-1">{formatDateFull(label)}</p>
+      <p className="text-base font-mono font-semibold text-[#10b981]">
         {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
           payload[0].value,
         )}
@@ -62,8 +70,10 @@ export default function TrendChart({ loading, snapshots }) {
       {loading ? (
         <Skeleton className="h-40 flex-1" />
       ) : chartData.length === 0 ? (
-        <div className="flex-1 min-h-[160px] flex items-center justify-center text-xs text-[#7d8590]">
-          No snapshots yet.
+        <div className="flex-1 min-h-[160px] flex items-center justify-center px-4">
+          <p className="text-center text-xs text-[#7d8590]">
+            No snapshots yet. Use &apos;+ Add&apos; to record your first net worth snapshot.
+          </p>
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={160} className="flex-1">
@@ -77,7 +87,7 @@ export default function TrendChart({ loading, snapshots }) {
             <CartesianGrid strokeDasharray="3 3" stroke="#21262d" vertical={false} />
             <XAxis
               dataKey="date"
-              tickFormatter={formatDate}
+              tickFormatter={formatDateShort}
               tick={{ fill: '#7d8590', fontSize: 10 }}
               axisLine={false}
               tickLine={false}

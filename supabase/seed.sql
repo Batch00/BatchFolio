@@ -2,6 +2,11 @@
 -- IMPORTANT: Replace '5855432c-fc23-48dd-8a36-825bee0a03a8' with the real demo user's UUID
 -- from Supabase Auth (Settings > Users) before running this script.
 -- The demo user must already exist with email demo@batchfolio.app / password demo1234.
+--
+-- PREREQUISITE: Run the following in the Supabase SQL editor before using snapshot upsert:
+--   alter table net_worth_snapshots
+--     add constraint snapshots_user_date_unique
+--     unique (user_id, date);
 
 -- ============================================================
 -- Accounts
