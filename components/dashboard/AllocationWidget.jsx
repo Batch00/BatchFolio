@@ -24,21 +24,21 @@ export default function AllocationWidget({ loading, holdings }) {
   }))
 
   return (
-    <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4">
-      <p className="text-[10px] uppercase tracking-widest text-[#7d8590] font-mono mb-3">
+    <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4 h-full">
+      <p className="text-[10px] uppercase text-[#7d8590] font-mono mb-[10px]" style={{ letterSpacing: '0.08em' }}>
         Allocation
       </p>
 
       {loading ? (
         <Skeleton className="h-40" />
       ) : data.length === 0 ? (
-        <div className="h-40 flex items-center justify-center text-xs text-[#7d8590]">
+        <div className="min-h-[160px] flex items-center justify-center text-xs text-[#7d8590]">
           No holdings yet.
         </div>
       ) : (
         <>
           <div className="flex justify-center mb-3">
-            <ResponsiveContainer width={120} height={120}>
+            <ResponsiveContainer width="100%" height={120}>
               <PieChart>
                 <Pie
                   data={data}

@@ -16,8 +16,8 @@ export default function MoversWidget({ loading, holdings, prices, onOpenDrawer }
   const maxPct = movers.length > 0 ? movers[0].absDayPct : 1
 
   return (
-    <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4">
-      <p className="text-[10px] uppercase tracking-widest text-[#7d8590] font-mono mb-3">
+    <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4 h-full">
+      <p className="text-[10px] uppercase text-[#7d8590] font-mono mb-[10px]" style={{ letterSpacing: '0.08em' }}>
         Top Movers
       </p>
 
@@ -28,7 +28,9 @@ export default function MoversWidget({ loading, holdings, prices, onOpenDrawer }
           ))}
         </div>
       ) : movers.length === 0 ? (
-        <p className="text-xs text-[#7d8590]">No movers data.</p>
+        <div className="min-h-[80px] flex items-center justify-center">
+          <p className="text-xs text-[#7d8590]">No movers data.</p>
+        </div>
       ) : (
         <div className="space-y-3">
           {movers.map((m) => {

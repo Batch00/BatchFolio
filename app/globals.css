@@ -59,3 +59,52 @@ body {
   background: #21262d;
   border-radius: 3px;
 }
+
+/* LIVE dot animation */
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Drawer slide animations */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slide-in-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* Stock drawer - mobile: bottom sheet, desktop: right panel */
+.stock-drawer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 85vh;
+  z-index: 50;
+  background: #161b22;
+  border-top: 1px solid #10b981;
+  border-radius: 12px 12px 0 0;
+  animation: slide-in-up 200ms ease;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+@media (min-width: 640px) {
+  .stock-drawer {
+    top: 0;
+    bottom: auto;
+    left: auto;
+    right: 0;
+    width: 360px;
+    height: 100%;
+    border-top: none;
+    border-left: 1px solid #10b981;
+    border-radius: 0;
+    animation: slide-in-right 200ms ease;
+  }
+}
