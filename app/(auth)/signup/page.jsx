@@ -25,6 +25,20 @@ export default function SignupPage() {
     setError(null)
     setMessage(null)
 
+    // Check invite before signing up
+    const checkRes = await fetch('/api/auth/check-invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    const checkData = await checkRes.json()
+
+    if (!checkData.allowed) {
+      setError(checkData.message ?? 'BatchFolio is currently invite-only. Request access at batch-apps.com')
+      setLoading(false)
+      return
+    }
+
     const { error: err } = await supabase.auth.signUp({
       email,
       password,

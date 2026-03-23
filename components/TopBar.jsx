@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,19 +19,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Settings, LayoutDashboard, Briefcase, PieChart, Star } from 'lucide-react'
+import { Settings, LayoutDashboard, Briefcase, PieChart, Star, ShieldCheck } from 'lucide-react'
 
 const TABS = [
-  { id: 'overview', label: 'OVERVIEW', icon: LayoutDashboard },
-  { id: 'accounts', label: 'ACCOUNTS', icon: Briefcase },
+  { id: 'overview',  label: 'OVERVIEW',  icon: LayoutDashboard },
+  { id: 'accounts',  label: 'ACCOUNTS',  icon: Briefcase },
   { id: 'portfolio', label: 'PORTFOLIO', icon: PieChart },
   { id: 'watchlist', label: 'WATCHLIST', icon: Star },
 ]
 
 const ADD_TYPES = [
-  { id: 'account', label: 'Add Account' },
-  { id: 'holding', label: 'Add Holding' },
-  { id: 'snapshot', label: 'Add Snapshot' },
+  { id: 'account',   label: 'Add Account' },
+  { id: 'holding',   label: 'Add Holding' },
+  { id: 'snapshot',  label: 'Add Snapshot' },
   { id: 'watchlist', label: 'Add Watchlist Ticker' },
 ]
 
@@ -42,7 +43,11 @@ const fmt = (v) =>
 const fmtMobile = (v) =>
   v == null
     ? '--'
-    : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
+    : new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0,
+      }).format(v)
 
 export default function TopBar({
   activeTab,
@@ -50,8 +55,12 @@ export default function TopBar({
   netWorth,
   netWorthChange,
   netWorthChangePositive,
+  user,
+  isDemo,
+  onDemoBlock,
 }) {
   const supabase = createClient()
+  const isAdmin = user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL
 
   const [addOpen, setAddOpen] = useState(false)
   const [addType, setAddType] = useState('account')
@@ -76,6 +85,10 @@ export default function TopBar({
   const [success, setSuccess] = useState(null)
 
   async function handleOpen() {
+    if (isDemo) {
+      onDemoBlock?.()
+      return
+    }
     setError(null)
     setSuccess(null)
     setAddOpen(true)
@@ -93,12 +106,12 @@ export default function TopBar({
     setError(null)
     try {
       const {
-        data: { user },
+        data: { user: currentUser },
       } = await supabase.auth.getUser()
 
       if (addType === 'account') {
         const { error: err } = await supabase.from('accounts').insert({
-          user_id: user.id,
+          user_id: currentUser.id,
           name: accName.trim(),
           provider: accProvider.trim(),
           type: accType,
@@ -128,7 +141,7 @@ export default function TopBar({
         const assets = parseFloat(snapAssets)
         const liabilities = parseFloat(snapLiabilities)
         const { error: err } = await supabase.from('net_worth_snapshots').insert({
-          user_id: user.id,
+          user_id: currentUser.id,
           date: new Date().toISOString().split('T')[0],
           total_assets: assets,
           total_liabilities: liabilities,
@@ -144,7 +157,7 @@ export default function TopBar({
         const ticker = wlTicker.toUpperCase().trim()
         const { error: err } = await supabase
           .from('watchlist')
-          .insert({ user_id: user.id, ticker })
+          .insert({ user_id: currentUser.id, ticker })
         if (err) {
           if (err.code === '23505') throw new Error(`${ticker} already in watchlist.`)
           throw err
@@ -170,88 +183,131 @@ export default function TopBar({
       : null
 
   return (
-    <div className="h-12 grid grid-cols-[1fr_auto_1fr] items-center px-4 border-b border-[#21262d] bg-[#0d1117] flex-shrink-0 sticky top-0 z-30">
-      {/* Left: Logo + Tabs */}
-      <div className="flex items-center min-w-0">
-        <div className="flex items-center mr-4 flex-shrink-0">
+    <div
+      className="flex-shrink-0 sticky top-0 z-30 border-b"
+      style={{ borderColor: '#21262d', background: '#0d1117' }}
+    >
+      {/* Desktop top bar */}
+      <div className="hidden md:grid h-12 grid-cols-[1fr_auto_1fr] items-center px-4">
+        {/* Left: Logo + Tabs */}
+        <div className="flex items-center min-w-0">
+          <div className="flex items-center mr-4 flex-shrink-0">
+            <span className="text-[#7d8590] text-[15px] font-medium">Batch</span>
+            <span className="text-[#10b981] text-[15px] font-medium">Folio</span>
+          </div>
+
+          <div className="flex items-center flex-shrink-0">
+            {TABS.map(({ id, label }) => {
+              const active = activeTab === id
+              return (
+                <button
+                  key={id}
+                  onClick={() => onTabChange(id)}
+                  className={`h-12 flex items-center px-3 border-b-2 text-[11px] uppercase tracking-widest font-medium transition-colors ${
+                    active
+                      ? 'border-[#10b981] text-[#10b981]'
+                      : 'border-transparent text-[#7d8590] hover:text-[#e6edf3]'
+                  }`}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Center: net worth */}
+        <div className="flex items-center justify-center gap-2">
+          {netWorth != null ? (
+            <>
+              <span className="font-mono font-semibold text-[#e6edf3]" style={{ fontSize: 14 }}>
+                {fmt(netWorth)}
+              </span>
+              {netWorthChange != null && (
+                <span
+                  className={`font-mono flex-shrink-0 ${
+                    netWorthChangePositive ? 'text-[#34d399]' : 'text-[#f87171]'
+                  }`}
+                  style={{ fontSize: 12 }}
+                >
+                  {netWorthChangePositive ? '+' : ''}
+                  {fmt(netWorthChange)}
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="font-mono text-xs text-[#7d8590]">--</span>
+          )}
+        </div>
+
+        {/* Right actions */}
+        <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center gap-1.5 border border-[#21262d] rounded px-2 py-1">
+            <span
+              className="inline-flex h-2 w-2 rounded-full bg-[#10b981]"
+              style={{ animation: 'live-pulse 2s infinite' }}
+            />
+            <span className="text-[10px] text-[#7d8590] uppercase tracking-wider">Live</span>
+          </div>
+
+          <button
+            onClick={handleOpen}
+            className="border border-[#10b981]/50 bg-[rgba(16,185,129,0.06)] text-[#10b981] hover:bg-[rgba(16,185,129,0.12)] hover:border-[#10b981] transition-colors rounded px-2.5 py-1 text-[11px] uppercase tracking-wider"
+          >
+            + Add
+          </button>
+
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="text-[#7d8590] hover:text-[#e6edf3] transition-colors"
+              title="Admin"
+            >
+              <ShieldCheck className="h-4 w-4" />
+            </Link>
+          )}
+
+          <button
+            onClick={() => supabase.auth.signOut().then(() => window.location.reload())}
+            className="text-[#7d8590] hover:text-[#e6edf3] transition-colors"
+            title="Sign out"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile top bar: logo left + + button right */}
+      <div className="md:hidden flex h-12 items-center justify-between px-4">
+        <div className="flex items-center">
           <span className="text-[#7d8590] text-[15px] font-medium">Batch</span>
           <span className="text-[#10b981] text-[15px] font-medium">Folio</span>
         </div>
 
-        {/* Tabs - desktop labels, mobile icons */}
-        <div className="flex items-center flex-shrink-0">
-          {TABS.map(({ id, label, icon: Icon }) => {
-            const active = activeTab === id
-            return (
-              <button
-                key={id}
-                onClick={() => onTabChange(id)}
-                className={`h-12 flex items-center gap-1.5 px-3 border-b-2 text-[11px] uppercase tracking-widest font-medium transition-colors ${
-                  active
-                    ? 'border-[#10b981] text-[#10b981]'
-                    : 'border-transparent text-[#7d8590] hover:text-[#e6edf3]'
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5 sm:hidden" />
-                <span className="hidden sm:inline">{label}</span>
-              </button>
-            )
-          })}
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="text-[#7d8590] hover:text-[#e6edf3] transition-colors"
+              title="Admin"
+            >
+              <ShieldCheck className="h-4 w-4" />
+            </Link>
+          )}
+          <button
+            onClick={handleOpen}
+            className="border border-[#10b981]/50 bg-[rgba(16,185,129,0.06)] text-[#10b981] hover:bg-[rgba(16,185,129,0.12)] hover:border-[#10b981] transition-colors rounded px-2.5 py-1 text-[11px] uppercase tracking-wider"
+          >
+            + Add
+          </button>
+          <button
+            onClick={() => supabase.auth.signOut().then(() => window.location.reload())}
+            className="text-[#7d8590] hover:text-[#e6edf3] transition-colors"
+            title="Sign out"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
         </div>
-      </div>
-
-      {/* Center: persistent net worth - truly centered via grid */}
-      <div className="flex items-center justify-center gap-2">
-        {netWorth != null ? (
-          <>
-            <span className="font-mono font-semibold text-[#e6edf3]" style={{ fontSize: 14 }}>
-              <span className="sm:hidden">{fmtMobile(netWorth)}</span>
-              <span className="hidden sm:inline">{fmt(netWorth)}</span>
-            </span>
-            {netWorthChange != null && (
-              <span
-                className={`font-mono flex-shrink-0 ${
-                  netWorthChangePositive ? 'text-[#34d399]' : 'text-[#f87171]'
-                }`}
-                style={{ fontSize: 12 }}
-              >
-                {netWorthChangePositive ? '+' : ''}
-                {fmt(netWorthChange)}
-              </span>
-            )}
-          </>
-        ) : (
-          <span className="font-mono text-xs text-[#7d8590]">--</span>
-        )}
-      </div>
-
-      {/* Right actions */}
-      <div className="flex items-center justify-end gap-2">
-        {/* LIVE indicator */}
-        <div className="hidden sm:flex items-center gap-1.5 border border-[#21262d] rounded px-2 py-1">
-          <span
-            className="inline-flex h-2 w-2 rounded-full bg-[#10b981]"
-            style={{ animation: 'live-pulse 2s infinite' }}
-          />
-          <span className="text-[10px] text-[#7d8590] uppercase tracking-wider">Live</span>
-        </div>
-
-        {/* + ADD */}
-        <button
-          onClick={handleOpen}
-          className="border border-[#10b981]/50 bg-[rgba(16,185,129,0.06)] text-[#10b981] hover:bg-[rgba(16,185,129,0.12)] hover:border-[#10b981] transition-colors rounded px-2.5 py-1 text-[11px] uppercase tracking-wider"
-        >
-          + Add
-        </button>
-
-        {/* Settings */}
-        <button
-          onClick={() => supabase.auth.signOut().then(() => window.location.reload())}
-          className="text-[#7d8590] hover:text-[#e6edf3] transition-colors"
-          title="Sign out"
-        >
-          <Settings className="h-4 w-4" />
-        </button>
       </div>
 
       {/* Add Dialog */}
@@ -261,7 +317,6 @@ export default function TopBar({
             <DialogTitle>Add</DialogTitle>
           </DialogHeader>
 
-          {/* Type selector */}
           <div className="flex gap-1.5 flex-wrap">
             {ADD_TYPES.map((t) => (
               <button

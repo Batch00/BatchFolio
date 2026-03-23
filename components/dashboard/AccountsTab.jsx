@@ -25,7 +25,7 @@ import { Trash2, Plus, ChevronDown, ChevronRight } from 'lucide-react'
 const fmt = (v) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v ?? 0)
 
-export default function AccountsTab({ onOpenDrawer }) {
+export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
   const supabase = createClient()
   const [accounts, setAccounts] = useState([])
   const [holdings, setHoldings] = useState({})
@@ -115,6 +115,7 @@ export default function AccountsTab({ onOpenDrawer }) {
 
   async function addAccount(e) {
     e.preventDefault()
+    if (isDemo) { onDemoBlock?.(); return }
     setAccSaving(true)
     setAccError(null)
     const {
@@ -139,6 +140,7 @@ export default function AccountsTab({ onOpenDrawer }) {
   }
 
   async function deleteAccount(id) {
+    if (isDemo) { onDemoBlock?.(); return }
     if (!confirm('Delete this account and all its holdings?')) return
     await supabase.from('accounts').delete().eq('id', id)
     await loadData()
@@ -155,6 +157,7 @@ export default function AccountsTab({ onOpenDrawer }) {
 
   async function addHolding(e) {
     e.preventDefault()
+    if (isDemo) { onDemoBlock?.(); return }
     setHoldSaving(true)
     setHoldError(null)
     const { error: err } = await supabase.from('holdings').insert({
@@ -173,6 +176,7 @@ export default function AccountsTab({ onOpenDrawer }) {
   }
 
   async function deleteHolding(id) {
+    if (isDemo) { onDemoBlock?.(); return }
     if (!confirm('Remove this holding?')) return
     await supabase.from('holdings').delete().eq('id', id)
     await loadData()

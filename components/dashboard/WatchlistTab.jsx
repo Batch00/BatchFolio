@@ -14,7 +14,7 @@ const fmtCurrency = (v) =>
     ? '--'
     : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v)
 
-export default function WatchlistTab({ onOpenDrawer }) {
+export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
   const supabase = createClient()
   const [watchlist, setWatchlist] = useState([])
   const [quotes, setQuotes] = useState({})
@@ -85,6 +85,7 @@ export default function WatchlistTab({ onOpenDrawer }) {
 
   async function addTicker(e) {
     e.preventDefault()
+    if (isDemo) { onDemoBlock?.(); return }
     const ticker = tickerInput.toUpperCase().trim()
     if (!ticker) return
     setAdding(true)
@@ -103,6 +104,7 @@ export default function WatchlistTab({ onOpenDrawer }) {
   }
 
   async function removeTicker(id) {
+    if (isDemo) { onDemoBlock?.(); return }
     await supabase.from('watchlist').delete().eq('id', id)
     setWatchlist((prev) => prev.filter((w) => w.id !== id))
   }

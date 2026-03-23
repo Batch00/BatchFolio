@@ -9,6 +9,11 @@ import HoldingsWidget from '@/components/dashboard/HoldingsWidget'
 import MoversWidget from '@/components/dashboard/MoversWidget'
 import WatchlistWidget from '@/components/dashboard/WatchlistWidget'
 
+const fmtLarge = (v) =>
+  v == null
+    ? '--'
+    : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
+
 export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   const supabase = createClient()
   const [snapshots, setSnapshots] = useState([])
@@ -134,8 +139,28 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   }))
 
   return (
-    <div className="px-6 py-4 min-h-[calc(100vh-48px)] flex flex-col gap-4">
+    <div className="px-4 md:px-6 py-4 min-h-[calc(100vh-48px)] flex flex-col gap-4">
       {error && <p className="text-xs text-[#f87171]">{error}</p>}
+
+      {/* Mobile net worth hero - shown only on mobile */}
+      <div className="md:hidden text-center py-4">
+        {loading ? (
+          <>
+            <div className="h-10 w-44 bg-[#21262d] rounded animate-pulse mx-auto mb-2" />
+            <div className="h-4 w-28 bg-[#21262d] rounded animate-pulse mx-auto" />
+          </>
+        ) : (
+          <>
+            <p className="font-mono text-4xl font-semibold text-[#e6edf3] leading-none mb-2">
+              {fmtLarge(netWorth)}
+            </p>
+            <p className={`font-mono text-sm ${dayPositive ? 'text-[#34d399]' : 'text-[#f87171]'}`}>
+              {dayPositive ? '+' : ''}
+              {fmtLarge(dayChange)} today
+            </p>
+          </>
+        )}
+      </div>
 
       {/* Hero row: net worth | trend chart (2x) | allocation */}
       <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_1fr] gap-4">

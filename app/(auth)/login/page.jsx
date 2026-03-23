@@ -89,6 +89,35 @@ export default function LoginPage() {
             Create one
           </Link>
         </p>
+
+        {/* Demo login */}
+        <div className="flex items-center gap-3 mt-4">
+          <div className="flex-1 border-t border-[#21262d]" />
+          <span className="text-xs text-[#7d8590]">or</span>
+          <div className="flex-1 border-t border-[#21262d]" />
+        </div>
+        <button
+          type="button"
+          onClick={async () => {
+            setLoading(true)
+            setError(null)
+            const { error: err } = await supabase.auth.signInWithPassword({
+              email: 'demo@batchfolio.app',
+              password: 'demo1234',
+            })
+            if (err) {
+              setError(err.message)
+              setLoading(false)
+            } else {
+              router.push('/')
+              router.refresh()
+            }
+          }}
+          disabled={loading}
+          className="mt-2 w-full border border-[#21262d] bg-transparent text-[#7d8590] hover:text-[#e6edf3] hover:border-[#7d8590] transition-colors rounded-md py-2 text-sm"
+        >
+          Try the demo
+        </button>
       </div>
     </div>
   )
