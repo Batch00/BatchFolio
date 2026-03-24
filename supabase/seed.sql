@@ -46,6 +46,9 @@ INSERT INTO liabilities (user_id, name, type, balance, interest_rate, created_at
 
 -- ============================================================
 -- Net worth snapshots (12 months, realistic variance)
+-- Note: in production these rows are auto-generated nightly
+-- by the auto-snapshot edge function. The rows below are
+-- seeded for demo purposes only.
 -- ============================================================
 INSERT INTO net_worth_snapshots (user_id, date, total_assets, total_liabilities, net_worth) VALUES
   ('5855432c-fc23-48dd-8a36-825bee0a03a8', (current_date - interval '11 months')::date, 207600,  27600, 180000),

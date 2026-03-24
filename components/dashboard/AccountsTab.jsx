@@ -249,13 +249,6 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
   }
 
   // Snapshot delete
-  async function deleteSnapshot(id) {
-    if (isDemo) { onDemoBlock?.(); return }
-    if (!confirm('Delete this snapshot?')) return
-    await supabase.from('net_worth_snapshots').delete().eq('id', id)
-    await loadData()
-  }
-
   function toggleExpand(id) {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }))
   }
@@ -534,10 +527,13 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
       {/* ---- SNAPSHOT HISTORY SECTION ---- */}
       <div>
         <p
-          className="text-[10px] uppercase text-[#7d8590] mb-3"
+          className="text-[10px] uppercase text-[#7d8590] mb-2"
           style={{ letterSpacing: '0.08em' }}
         >
           Snapshot History
+        </p>
+        <p className="text-xs text-[#7d8590] mb-3">
+          Your net worth is automatically recorded each night at midnight.
         </p>
 
         <div className="bg-[#161b22] border border-[#21262d] rounded-md overflow-hidden">
@@ -548,14 +544,13 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                 <TableHead className="text-right">Total Assets</TableHead>
                 <TableHead className="text-right">Total Liabilities</TableHead>
                 <TableHead className="text-right">Net Worth</TableHead>
-                <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 [...Array(3)].map((_, i) => (
                   <TableRow key={i}>
-                    {[...Array(5)].map((_, j) => (
+                    {[...Array(4)].map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-20" />
                       </TableCell>
@@ -565,10 +560,10 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
               ) : snapshots.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={4}
                     className="text-center text-[#7d8590] py-8 text-xs"
                   >
-                    No snapshots yet.
+                    No history yet. Your first snapshot will be recorded tonight at midnight.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -585,14 +580,6 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                     </TableCell>
                     <TableCell className="text-right font-mono text-xs text-[#e6edf3]">
                       {fmt(s.net_worth)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <button
-                        onClick={() => deleteSnapshot(s.id)}
-                        className="text-[#7d8590] hover:text-[#f87171] transition-colors"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
                     </TableCell>
                   </TableRow>
                 ))

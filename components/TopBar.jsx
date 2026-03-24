@@ -31,7 +31,6 @@ const TABS = [
 const ADD_TYPES = [
   { id: 'account',   label: 'Add Account' },
   { id: 'holding',   label: 'Add Holding' },
-  { id: 'snapshot',  label: 'Add Snapshot' },
   { id: 'watchlist', label: 'Add Watchlist Ticker' },
 ]
 
@@ -75,11 +74,6 @@ export default function TopBar({
   const [holdShares, setHoldShares] = useState('')
   const [holdCost, setHoldCost] = useState('')
 
-  const [snapDate, setSnapDate] = useState('')
-  const [snapAssets, setSnapAssets] = useState('')
-  const [snapLiabilities, setSnapLiabilities] = useState('')
-  const [snapPrefilling, setSnapPrefilling] = useState(false)
-
   const [wlTicker, setWlTicker] = useState('')
 
   const [saving, setSaving] = useState(false)
@@ -100,40 +94,6 @@ export default function TopBar({
       .order('created_at', { ascending: false })
     setAccounts(data ?? [])
     if (data?.length) setHoldAccountId(data[0].id)
-  }
-
-  async function loadSnapPrefill() {
-    setSnapPrefilling(true)
-    const [holdingsRes, liabRes] = await Promise.all([
-      supabase.from('holdings').select('*'),
-      supabase.from('liabilities').select('balance'),
-    ])
-
-    const allHoldings = holdingsRes.data ?? []
-    const tickers = [...new Set(allHoldings.map((h) => h.ticker))]
-
-    let portfolioValue = 0
-    if (tickers.length > 0) {
-      const results = await Promise.all(
-        tickers.map((t) =>
-          fetch(`/api/stock/quote?ticker=${t}`)
-            .then((r) => r.json())
-            .then((q) => ({ t, price: q.price ?? 0 }))
-            .catch(() => ({ t, price: 0 })),
-        ),
-      )
-      const priceMap = {}
-      results.forEach(({ t, price }) => { priceMap[t] = price })
-      portfolioValue = allHoldings.reduce(
-        (sum, h) => sum + h.shares * (priceMap[h.ticker] ?? 0),
-        0,
-      )
-    }
-
-    const liabTotal = (liabRes.data ?? []).reduce((sum, l) => sum + l.balance, 0)
-    setSnapAssets(portfolioValue.toFixed(2))
-    setSnapLiabilities(liabTotal.toFixed(2))
-    setSnapPrefilling(false)
   }
 
   async function handleSubmit(e) {
@@ -171,26 +131,6 @@ export default function TopBar({
         setHoldShares('')
         setHoldCost('')
         setSuccess('Holding added.')
-      }
-
-      if (addType === 'snapshot') {
-        const assets = parseFloat(snapAssets)
-        const liabilities = parseFloat(snapLiabilities)
-        const { error: err } = await supabase.from('net_worth_snapshots').upsert(
-          {
-            user_id: currentUser.id,
-            date: snapDate || new Date().toISOString().split('T')[0],
-            total_assets: assets,
-            total_liabilities: liabilities,
-            net_worth: assets - liabilities,
-          },
-          { onConflict: 'user_id,date' },
-        )
-        if (err) throw err
-        setSnapAssets('')
-        setSnapLiabilities('')
-        setSnapDate(new Date().toISOString().split('T')[0])
-        setSuccess('Snapshot saved.')
       }
 
       if (addType === 'watchlist') {
@@ -360,10 +300,6 @@ export default function TopBar({
                   setAddType(t.id)
                   setError(null)
                   setSuccess(null)
-                  if (t.id === 'snapshot') {
-                    setSnapDate(new Date().toISOString().split('T')[0])
-                    loadSnapPrefill()
-                  }
                 }}
                 className={`px-3 py-1.5 text-xs rounded border transition-colors ${
                   addType === t.id
@@ -465,60 +401,6 @@ export default function TopBar({
                     required
                   />
                 </div>
-              </>
-            )}
-
-            {addType === 'snapshot' && (
-              <>
-                <div className="space-y-1.5">
-                  <Label>Date</Label>
-                  <Input
-                    type="date"
-                    value={snapDate}
-                    onChange={(e) => setSnapDate(e.target.value)}
-                    className="font-mono"
-                    required
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Total Assets ($)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={snapPrefilling ? '' : snapAssets}
-                    onChange={(e) => setSnapAssets(e.target.value)}
-                    placeholder={snapPrefilling ? 'Fetching live data...' : '0.00'}
-                    className="font-mono"
-                    disabled={snapPrefilling}
-                    required
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Total Liabilities ($)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={snapPrefilling ? '' : snapLiabilities}
-                    onChange={(e) => setSnapLiabilities(e.target.value)}
-                    placeholder={snapPrefilling ? 'Fetching live data...' : '0.00'}
-                    className="font-mono"
-                    disabled={snapPrefilling}
-                    required
-                  />
-                </div>
-                <div className="bg-[#0d1117] rounded px-3 py-2.5">
-                  <p className="text-[10px] uppercase tracking-wider text-[#7d8590] mb-1">Net Worth</p>
-                  <p className="font-mono text-lg font-semibold text-[#10b981]">
-                    {snapAssets && snapLiabilities
-                      ? fmt(parseFloat(snapAssets) - parseFloat(snapLiabilities))
-                      : '--'}
-                  </p>
-                </div>
-                <p className="text-[11px] text-[#7d8590]">
-                  Assets and liabilities are pre-filled from your current data. Adjust if needed.
-                </p>
               </>
             )}
 

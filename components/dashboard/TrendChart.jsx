@@ -72,7 +72,7 @@ export default function TrendChart({ loading, snapshots }) {
       ) : chartData.length === 0 ? (
         <div className="flex-1 min-h-[160px] flex items-center justify-center px-4">
           <p className="text-center text-xs text-[#7d8590]">
-            No snapshots yet. Use &apos;+ Add&apos; to record your first net worth snapshot.
+            Your net worth history will appear here. The first snapshot is recorded automatically at midnight tonight.
           </p>
         </div>
       ) : (

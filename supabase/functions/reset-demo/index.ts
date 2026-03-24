@@ -1,7 +1,8 @@
 // Deploy with:
 // supabase functions deploy reset-demo
 // Schedule nightly at 3AM UTC in Supabase dashboard >
-// Edge Functions > reset-demo > Schedule
+// Edge Functions > reset-demo > Schedule (cron: 0 3 * * *)
+// Required secrets: APP_SUPABASE_URL, SERVICE_ROLE_KEY
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -9,8 +10,8 @@ const DEMO_EMAIL = 'demo@batchfolio.app'
 
 Deno.serve(async () => {
   const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    Deno.env.get('APP_SUPABASE_URL')!,
+    Deno.env.get('SERVICE_ROLE_KEY')!,
   )
 
   // Look up demo user

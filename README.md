@@ -176,6 +176,50 @@ Live URL: [batchfolio.batch-apps.com](https://batchfolio.batch-apps.com)
 
 ---
 
+## Edge Functions
+
+BatchFolio uses two Supabase Edge Functions for nightly automation.
+
+### auto-snapshot
+
+Runs nightly at midnight UTC. For every user, fetches live portfolio value via Finnhub, sums liabilities, and upserts a `net_worth_snapshots` row for today. This is how the trend chart is populated automatically.
+
+| | |
+|---|---|
+| **Schedule** | `0 0 * * *` (midnight UTC) |
+| **Required secrets** | `FINNHUB_API_KEY`, `APP_SUPABASE_URL`, `SERVICE_ROLE_KEY` |
+
+### reset-demo
+
+Runs nightly at 3AM UTC. Wipes all data for the demo user (`demo@batchfolio.app`) and reseeds it from the fixed dataset in `supabase/seed.sql`.
+
+| | |
+|---|---|
+| **Schedule** | `0 3 * * *` (3AM UTC) |
+| **Required secrets** | `APP_SUPABASE_URL`, `SERVICE_ROLE_KEY` |
+
+### Deploy
+
+```bash
+supabase functions deploy auto-snapshot
+supabase functions deploy reset-demo
+```
+
+Schedule both in **Supabase dashboard > Edge Functions > select function > Schedule**:
+
+- `auto-snapshot`: cron `0 0 * * *`
+- `reset-demo`: cron `0 3 * * *`
+
+Set secrets in **Supabase dashboard > Edge Functions > Secrets**:
+
+```
+FINNHUB_API_KEY=your_finnhub_key
+APP_SUPABASE_URL=https://your-project.supabase.co
+SERVICE_ROLE_KEY=your_service_role_key
+```
+
+---
+
 ## Part of Batch Apps
 
 BatchFolio is one app in the [Batch Apps](https://batch-apps.com) suite of personal finance and productivity tools.
