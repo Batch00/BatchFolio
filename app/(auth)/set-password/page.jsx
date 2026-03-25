@@ -12,38 +12,49 @@ import { Label } from '@/components/ui/label'
 export default function SetPasswordPage() {
   const router = useRouter()
   const supabase = createClient()
-  const [loading, setLoading] = useState(true)
-  const [session, setSession] = useState(null)
+  const [checking, setChecking] = useState(true)
+  const [sessionReady, setSessionReady] = useState(false)
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState('')
 
   useEffect(() => {
+    // Listen for auth state changes as the primary signal —
+    // Supabase processes the hash fragment and fires this before
+    // getSession() would return anything useful
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, s) => {
-        if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && s)) {
-          setSession(s)
-          setLoading(false)
+      (event, session) => {
+        if (session && (
+          event === 'SIGNED_IN' ||
+          event === 'PASSWORD_RECOVERY' ||
+          event === 'INITIAL_SESSION'
+        )) {
+          setSessionReady(true)
+          setChecking(false)
         }
       }
     )
 
-    // Catch tokens already processed before the listener registered
-    setTimeout(async () => {
-      const { data: { session: s } } = await supabase.auth.getSession()
-      if (s) {
-        setSession(s)
+    // Fallback: give Supabase 500ms to process the hash, then
+    // check getSession() in case the event already fired
+    const checkSession = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        setSessionReady(true)
       }
-      setLoading(false)
-    }, 1000)
+      setChecking(false)
+    }
+
+    checkSession()
 
     return () => subscription.unsubscribe()
   }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
-    setError(null)
+    setError('')
 
     if (password !== confirm) {
       setError('Passwords do not match.')
@@ -58,13 +69,13 @@ export default function SetPasswordPage() {
     const { error: err } = await supabase.auth.updateUser({ password })
     if (err) {
       setError(err.message)
+      setSubmitting(false)
     } else {
       router.push('/')
     }
-    setSubmitting(false)
   }
 
-  if (loading) {
+  if (checking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0d1117]">
         <span className="font-mono text-sm text-[#7d8590]">Verifying invite link...</span>
@@ -72,13 +83,14 @@ export default function SetPasswordPage() {
     )
   }
 
-  if (!session) {
+  if (!sessionReady) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0d1117] px-4">
         <div className="w-full max-w-sm">
           <div className="bg-[#161b22] border border-[#21262d] rounded-md p-6 text-center">
-            <p className="text-sm text-[#e6edf3]">
-              This invite link is invalid or has expired. Contact the administrator to request a new invite.
+            <p className="text-sm text-[#e6edf3] mb-1">Invite link invalid or expired</p>
+            <p className="text-xs text-[#7d8590]">
+              Contact the administrator to request a new invite.
             </p>
           </div>
         </div>
