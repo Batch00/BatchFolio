@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import TopBar from '@/components/TopBar'
 import OverviewTab from '@/components/dashboard/OverviewTab'
@@ -137,13 +136,15 @@ export default function App() {
         >
           <span style={{ color: '#fbbf24', fontSize: 12 }}>
             You are in demo mode - data resets nightly.{' '}
-            <Link
-              href="/signup"
+            <a
+              href="https://batch-apps.com"
+              target="_blank"
+              rel="noopener noreferrer"
               className="underline underline-offset-2 hover:opacity-80 transition-opacity"
               style={{ color: '#fbbf24' }}
             >
-              Create an account
-            </Link>{' '}
+              Request access at batch-apps.com
+            </a>{' '}
             to save your own portfolio.
           </span>
         </div>
@@ -216,9 +217,14 @@ export default function App() {
         >
           <p className="text-sm text-[#e6edf3]">
             This is a demo account.{' '}
-            <Link href="/signup" className="text-[#10b981] hover:text-[#34d399] transition-colors">
-              Sign up
-            </Link>{' '}
+            <a
+              href="https://batch-apps.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#10b981] hover:text-[#34d399] transition-colors"
+            >
+              Request access at batch-apps.com
+            </a>{' '}
             to save your own data.
           </p>
         </div>

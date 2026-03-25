@@ -22,12 +22,10 @@ export async function POST(request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY,
   )
 
-  const { error } = await admin.from('invites').insert({
-    email: email.toLowerCase().trim(),
-    invited_by: user.id,
-    invited_at: new Date().toISOString(),
-    used: false,
-  })
+  const { error } = await admin.auth.admin.inviteUserByEmail(
+    email.toLowerCase().trim(),
+    { redirectTo: 'https://batchfolio.batch-apps.com/set-password' },
+  )
 
   if (error) {
     return Response.json({ error: error.message }, { status: 500 })

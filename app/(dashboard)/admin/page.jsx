@@ -112,10 +112,9 @@ export default function AdminPage() {
 
           {success && (
             <div className="bg-[rgba(16,185,129,0.08)] border border-[#10b981]/20 rounded px-3 py-2.5">
-              <p className="text-sm text-[#10b981]">Invite added.</p>
+              <p className="text-sm text-[#10b981]">Invite sent.</p>
               <p className="text-xs text-[#7d8590] mt-1">
-                Share the signup link with this person:{' '}
-                <span className="font-mono text-[#e6edf3]">batchfolio.batch-apps.com/signup</span>
+                They will receive an email with a link to set their password and access BatchFolio.
               </p>
             </div>
           )}
