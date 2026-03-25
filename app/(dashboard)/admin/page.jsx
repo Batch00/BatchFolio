@@ -35,20 +35,27 @@ export default function AdminPage() {
     setError(null)
     setSuccess(false)
 
-    const res = await fetch('/api/admin/send-invite', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    })
-    const json = await res.json()
+    try {
+      const res = await fetch('/api/admin/send-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const json = await res.json()
+      console.log('[send-invite] response:', res.status, json)
 
-    if (!res.ok || json.error) {
-      setError(json.error ?? 'Failed to send invite')
-    } else {
-      setSuccess(true)
-      setEmail('')
+      if (!res.ok || json.error) {
+        setError(json.error ?? 'Failed to send invite')
+      } else {
+        setSuccess(true)
+        setEmail('')
+      }
+    } catch (err) {
+      console.error('[send-invite] fetch error:', err)
+      setError(err.message ?? 'Request failed')
+    } finally {
+      setSubmitting(false)
     }
-    setSubmitting(false)
   }
 
   if (checking) {
