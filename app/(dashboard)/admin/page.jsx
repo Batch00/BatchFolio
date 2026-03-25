@@ -1,19 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { ArrowLeft } from 'lucide-react'
 
 export default function AdminPage() {
   const router = useRouter()
@@ -24,8 +18,6 @@ export default function AdminPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(false)
-  const [invites, setInvites] = useState([])
-  const [loadingInvites, setLoadingInvites] = useState(true)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -36,18 +28,6 @@ export default function AdminPage() {
       }
     })
   }, [router])
-
-  const loadInvites = useCallback(async () => {
-    setLoadingInvites(true)
-    const res = await fetch('/api/admin/invites')
-    const json = await res.json()
-    setInvites(json.invites ?? [])
-    setLoadingInvites(false)
-  }, [])
-
-  useEffect(() => {
-    if (!checking) loadInvites()
-  }, [checking, loadInvites])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -67,7 +47,6 @@ export default function AdminPage() {
     } else {
       setSuccess(true)
       setEmail('')
-      loadInvites()
     }
     setSubmitting(false)
   }
@@ -82,6 +61,14 @@ export default function AdminPage() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1.5 text-xs text-[#7d8590] hover:text-[#e6edf3] transition-colors mb-5"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Back
+      </Link>
+
       <div className="mb-6">
         <h1 className="text-lg font-semibold text-[#e6edf3] mb-1">Invite Management</h1>
         <p className="text-sm text-[#7d8590]">
@@ -125,51 +112,16 @@ export default function AdminPage() {
         </form>
       </div>
 
-      {/* Invites table */}
+      {/* Invites note */}
       <div className="bg-[#161b22] border border-[#21262d] rounded-md overflow-hidden">
         <div className="px-4 py-3 border-b border-[#21262d]">
           <p className="text-xs text-[#7d8590] uppercase tracking-wider">All Invites</p>
         </div>
-        {loadingInvites ? (
-          <div className="px-4 py-6 text-sm text-[#7d8590]">Loading...</div>
-        ) : invites.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-[#7d8590]">No invites yet.</div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Email</TableHead>
-                <TableHead>Invited At</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {invites.map((inv) => (
-                <TableRow key={inv.id}>
-                  <TableCell className="font-mono text-xs">{inv.email}</TableCell>
-                  <TableCell className="text-xs text-[#7d8590]">
-                    {new Date(inv.invited_at).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`text-xs font-mono px-2 py-0.5 rounded border ${
-                        inv.used
-                          ? 'text-[#7d8590] border-[#21262d]'
-                          : 'text-[#10b981] border-[#10b981]/30 bg-[rgba(16,185,129,0.06)]'
-                      }`}
-                    >
-                      {inv.used ? 'Used' : 'Pending'}
-                    </span>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+        <div className="px-4 py-6 flex items-center justify-center">
+          <p className="text-[#7d8590] text-center" style={{ fontSize: 13 }}>
+            Invites are managed by Supabase. View invited users in the Supabase dashboard under Authentication &gt; Users.
+          </p>
+        </div>
       </div>
     </div>
   )
