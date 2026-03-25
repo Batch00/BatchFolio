@@ -12,24 +12,31 @@ import { Label } from '@/components/ui/label'
 export default function SetPasswordPage() {
   const router = useRouter()
   const supabase = createClient()
-  const [sessionReady, setSessionReady] = useState(null) // null = checking, true = ready, false = invalid
+  const [loading, setLoading] = useState(true)
+  const [session, setSession] = useState(null)
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    // Supabase automatically exchanges the URL hash token and establishes a session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSessionReady(!!session)
-    })
-
-    // Also listen for the session to be established from the URL hash
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
-        setSessionReady(!!session)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, s) => {
+        if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && s)) {
+          setSession(s)
+          setLoading(false)
+        }
       }
-    })
+    )
+
+    // Catch tokens already processed before the listener registered
+    setTimeout(async () => {
+      const { data: { session: s } } = await supabase.auth.getSession()
+      if (s) {
+        setSession(s)
+      }
+      setLoading(false)
+    }, 1000)
 
     return () => subscription.unsubscribe()
   }, [])
@@ -47,30 +54,29 @@ export default function SetPasswordPage() {
       return
     }
 
-    setLoading(true)
+    setSubmitting(true)
     const { error: err } = await supabase.auth.updateUser({ password })
     if (err) {
       setError(err.message)
     } else {
       router.push('/')
-      router.refresh()
     }
-    setLoading(false)
+    setSubmitting(false)
   }
 
-  if (sessionReady === null) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0d1117]">
-        <span className="text-sm text-[#7d8590]">Verifying invite link...</span>
+        <span className="font-mono text-sm text-[#7d8590]">Verifying invite link...</span>
       </div>
     )
   }
 
-  if (sessionReady === false) {
+  if (!session) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0d1117] px-4">
-        <div className="w-full max-w-sm text-center">
-          <div className="bg-[#161b22] border border-[#21262d] rounded-md p-6">
+        <div className="w-full max-w-sm">
+          <div className="bg-[#161b22] border border-[#21262d] rounded-md p-6 text-center">
             <p className="text-sm text-[#e6edf3]">
               This invite link is invalid or has expired. Contact the administrator to request a new invite.
             </p>
@@ -135,8 +141,8 @@ export default function SetPasswordPage() {
               <p className="text-sm text-[#f87171]">{error}</p>
             )}
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Setting password...' : 'Set password'}
+            <Button type="submit" className="w-full" disabled={submitting}>
+              {submitting ? 'Setting password...' : 'Set password'}
             </Button>
           </form>
         </div>
