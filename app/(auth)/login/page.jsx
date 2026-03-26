@@ -2,9 +2,10 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { getBrowserClient } from '@/lib/supabase-browser'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,6 +17,31 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+
+  // Detect invite hash — middleware redirects unauthenticated users
+  // to /login, which preserves the hash fragment in the browser.
+  // Parse and exchange the tokens here before showing the form.
+  useEffect(() => {
+    const hash = window.location.hash
+    if (!hash.includes('type=invite')) return
+
+    const params = new URLSearchParams(hash.substring(1))
+    const accessToken = params.get('access_token')
+    const refreshToken = params.get('refresh_token')
+
+    if (!accessToken || !refreshToken) return
+
+    const browserClient = getBrowserClient()
+
+    browserClient.auth
+      .setSession({ access_token: accessToken, refresh_token: refreshToken })
+      .then(({ data: { session }, error: err }) => {
+        if (session && !err) {
+          window.history.replaceState(null, '', window.location.pathname)
+          router.push('/set-password')
+        }
+      })
+  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
