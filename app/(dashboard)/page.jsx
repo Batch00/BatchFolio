@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import TopBar from '@/components/TopBar'
 import OverviewTab from '@/components/dashboard/OverviewTab'
@@ -19,6 +20,7 @@ const TABS = [
 
 export default function App() {
   const supabase = createClient()
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState('overview')
   const [drawerStock, setDrawerStock] = useState(null)
   const [netWorthData, setNetWorthData] = useState({
@@ -43,9 +45,24 @@ export default function App() {
     currentVersion &&
     initialVersionRef.current !== currentVersion
 
-  // Load current user
+  // Load current user — redirect to /set-password on first invite login
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user: u } }) => setUser(u))
+    supabase.auth.getUser().then(({ data: { user: u } }) => {
+      if (u) {
+        const meta = u.app_metadata ?? {}
+        const isInviteUser =
+          meta.provider === 'email' &&
+          Array.isArray(meta.providers) &&
+          meta.providers.length === 1 &&
+          meta.providers[0] === 'email'
+        const noUserMetadata = Object.keys(u.user_metadata ?? {}).length === 0
+        if (isInviteUser && noUserMetadata) {
+          router.replace('/set-password')
+          return
+        }
+      }
+      setUser(u)
+    })
   }, [])
 
   // Version polling
