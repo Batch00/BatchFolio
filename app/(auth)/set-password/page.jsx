@@ -20,36 +20,21 @@ export default function SetPasswordPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    // Listen for auth state changes as the primary signal —
-    // Supabase processes the hash fragment and fires this before
-    // getSession() would return anything useful
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (session && (
-          event === 'SIGNED_IN' ||
-          event === 'PASSWORD_RECOVERY' ||
-          event === 'INITIAL_SESSION'
-        )) {
-          setSessionReady(true)
-          setChecking(false)
-        }
-      }
-    )
-
-    // Fallback: give Supabase 500ms to process the hash, then
-    // check getSession() in case the event already fired
+    // PKCE exchange happens in /auth/callback before landing here,
+    // so the session is already established — a simple getSession() check suffices
     const checkSession = async () => {
-      await new Promise((resolve) => setTimeout(resolve, 500))
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
         setSessionReady(true)
+      } else {
+        const params = new URLSearchParams(window.location.search)
+        if (params.get('error')) {
+          setSessionReady(false)
+        }
       }
       setChecking(false)
     }
-
     checkSession()
-
-    return () => subscription.unsubscribe()
   }, [])
 
   async function handleSubmit(e) {

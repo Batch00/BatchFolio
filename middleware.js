@@ -2,7 +2,11 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 
 export async function middleware(request) {
-  if (request.nextUrl.pathname.startsWith('/set-password')) {
+  const { pathname } = request.nextUrl
+  if (
+    pathname.startsWith('/set-password') ||
+    pathname.startsWith('/auth/callback')
+  ) {
     return NextResponse.next()
   }
 
@@ -34,10 +38,7 @@ export async function middleware(request) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const pathname = request.nextUrl.pathname
-  const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/set-password')
-
-  if (!user && !isAuthPage) {
+  if (!user && !pathname.startsWith('/login')) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
