@@ -29,12 +29,12 @@ export async function POST(request) {
       return Response.json({ error: 'Email required' }, { status: 400 })
     }
 
-    // Important: https://batchfolio.batch-apps.com/auth/callback
+    // Important: https://batchfolio.batch-apps.com/set-password
     // must be listed in Supabase dashboard > Authentication >
     // URL Configuration > Redirect URLs
     const invitePromise = supabaseAdmin.auth.admin.inviteUserByEmail(
       email.toLowerCase().trim(),
-      { redirectTo: 'https://batchfolio.batch-apps.com/auth/callback' },
+      { redirectTo: 'https://batchfolio.batch-apps.com/set-password' },
     )
 
     const timeoutPromise = new Promise((_, reject) =>

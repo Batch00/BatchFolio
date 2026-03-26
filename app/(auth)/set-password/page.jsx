@@ -2,38 +2,45 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
+import { createBrowserClient } from '@supabase/ssr'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 export default function SetPasswordPage() {
   const router = useRouter()
-  const supabase = createClient()
-  const [checking, setChecking] = useState(true)
-  const [sessionReady, setSessionReady] = useState(false)
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
-  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [sessionReady, setSessionReady] = useState(false)
+  const [checking, setChecking] = useState(true)
 
   useEffect(() => {
-    // PKCE exchange happens in /auth/callback before landing here,
-    // so the session is already established — a simple getSession() check suffices
+    // Create a fresh client directly — do not use the
+    // shared createClient() wrapper which has flowType: 'pkce'
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    )
+
+    // The /auth/v1/verify link sets the session via a
+    // server-side redirect — by the time the user lands
+    // on this page the session cookie should already exist.
     const checkSession = async () => {
+      // Wait for any cookie processing to complete
+      await new Promise((resolve) => setTimeout(resolve, 800))
+
       const { data: { session } } = await supabase.auth.getSession()
+
       if (session) {
         setSessionReady(true)
-      } else {
-        const params = new URLSearchParams(window.location.search)
-        if (params.get('error')) {
-          setSessionReady(false)
-        }
       }
       setChecking(false)
     }
+
     checkSession()
   }, [])
 
@@ -42,19 +49,26 @@ export default function SetPasswordPage() {
     setError('')
 
     if (password !== confirm) {
-      setError('Passwords do not match.')
+      setError('Passwords do not match')
       return
     }
     if (password.length < 8) {
-      setError('Password must be at least 8 characters.')
+      setError('Password must be at least 8 characters')
       return
     }
 
-    setSubmitting(true)
+    setLoading(true)
+
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    )
+
     const { error: err } = await supabase.auth.updateUser({ password })
+
     if (err) {
       setError(err.message)
-      setSubmitting(false)
+      setLoading(false)
     } else {
       router.push('/')
     }
@@ -138,8 +152,8 @@ export default function SetPasswordPage() {
               <p className="text-sm text-[#f87171]">{error}</p>
             )}
 
-            <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? 'Setting password...' : 'Set password'}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Setting password...' : 'Set password'}
             </Button>
           </form>
         </div>
