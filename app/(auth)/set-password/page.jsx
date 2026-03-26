@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { getBrowserClient } from '@/lib/supabase-browser'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,29 +19,14 @@ export default function SetPasswordPage() {
   const [checking, setChecking] = useState(true)
 
   useEffect(() => {
-    // Create a fresh client directly — do not use the
-    // shared createClient() wrapper which has flowType: 'pkce'
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    )
+    const supabase = getBrowserClient()
 
-    // The /auth/v1/verify link sets the session via a
-    // server-side redirect — by the time the user lands
-    // on this page the session cookie should already exist.
-    const checkSession = async () => {
-      // Wait for any cookie processing to complete
-      await new Promise((resolve) => setTimeout(resolve, 800))
-
-      const { data: { session } } = await supabase.auth.getSession()
-
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         setSessionReady(true)
       }
       setChecking(false)
-    }
-
-    checkSession()
+    })
   }, [])
 
   async function handleSubmit(e) {
@@ -59,11 +44,7 @@ export default function SetPasswordPage() {
 
     setLoading(true)
 
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    )
-
+    const supabase = getBrowserClient()
     const { error: err } = await supabase.auth.updateUser({ password })
 
     if (err) {

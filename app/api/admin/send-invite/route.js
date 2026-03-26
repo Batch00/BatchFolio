@@ -29,9 +29,11 @@ export async function POST(request) {
       return Response.json({ error: 'Email required' }, { status: 400 })
     }
 
-    // Important: https://batchfolio.batch-apps.com
-    // must be listed in Supabase dashboard > Authentication >
-    // URL Configuration > Redirect URLs
+    // Redirect URL must be the site root — the InviteHandler
+    // component in the dashboard layout detects the invite hash
+    // and redirects to /set-password after exchanging the session.
+    // https://batchfolio.batch-apps.com must be listed in
+    // Supabase dashboard > Authentication > URL Configuration > Redirect URLs
     const invitePromise = supabaseAdmin.auth.admin.inviteUserByEmail(
       email.toLowerCase().trim(),
       { redirectTo: 'https://batchfolio.batch-apps.com' },
