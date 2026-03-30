@@ -89,8 +89,11 @@ export default function StockDrawer({ ticker, onClose }) {
     if (!symbol) return
     setChartLoading(true)
     try {
-      const res = await fetch(`/api/stock/chart?ticker=${symbol}&range=${range}`)
+      const url = `/api/stock/chart?ticker=${symbol}&range=${range}`
+      console.log('Fetching chart:', url)
+      const res = await fetch(url)
       const data = await res.json()
+      console.log('Chart API response:', data)
       if (data.error) throw new Error(data.error)
       setCandles(data.candles ?? [])
     } catch {
@@ -173,92 +176,94 @@ export default function StockDrawer({ ticker, onClose }) {
           {error && <p className="text-xs text-[#f87171] mt-2">{error}</p>}
         </div>
 
-        {/* Chart */}
-        <div className="px-5 pt-3 flex-shrink-0">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-[#7d8590]">Price</p>
-            <div className="flex gap-0.5 bg-[#21262d] rounded p-0.5">
-              {RANGES.map((r) => (
-                <button
-                  key={r}
-                  onClick={() => setRange(r)}
-                  className={`px-2 py-0.5 text-xs rounded font-mono transition-colors ${
-                    range === r ? 'bg-[#10b981] text-white' : 'text-[#7d8590] hover:text-[#e6edf3]'
-                  }`}
-                >
-                  {r}
-                </button>
-              ))}
+        <div className="stock-drawer-body">
+          {/* Chart */}
+          <div className="px-5 pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-[#7d8590]">Price</p>
+              <div className="flex gap-0.5 bg-[#21262d] rounded p-0.5">
+                {RANGES.map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setRange(r)}
+                    className={`px-2 py-0.5 text-xs rounded font-mono transition-colors ${
+                      range === r ? 'bg-[#10b981] text-white' : 'text-[#7d8590] hover:text-[#e6edf3]'
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
             </div>
+            {chartLoading ? (
+              <Skeleton className="h-[120px]" />
+            ) : (
+              <StockPriceChart candles={candles} />
+            )}
           </div>
-          {chartLoading ? (
-            <Skeleton className="h-[120px]" />
-          ) : (
-            <StockPriceChart candles={candles} />
+
+          {/* Your position */}
+          {!loading && position && (
+            <div className="px-5 pt-4 border-t border-[#21262d]">
+              <p className="text-[10px] uppercase tracking-[0.08em] text-[#7d8590] mb-[10px]">Your Position</p>
+              <div className="bg-[#0d1117] border border-[#21262d] rounded-md px-3 py-1">
+                <StatRow
+                  label="Shares"
+                  value={fmtNum(position.totalShares, { maximumFractionDigits: 4 })}
+                />
+                <StatRow label="Avg Cost" value={fmtCurrency(position.avgCost)} />
+                <StatRow label="Total Value" value={fmtCurrency(position.totalValue)} />
+                <StatRow
+                  label="Gain/Loss"
+                  value={`${position.gainLoss >= 0 ? '+' : ''}${fmtCurrency(position.gainLoss)}`}
+                  colored={position.gainLoss >= 0 ? 'text-[#34d399]' : 'text-[#f87171]'}
+                />
+                <StatRow
+                  label="Gain/Loss %"
+                  value={`${position.gainLoss >= 0 ? '+' : ''}${position.gainPct.toFixed(2)}%`}
+                  colored={position.gainLoss >= 0 ? 'text-[#34d399]' : 'text-[#f87171]'}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Key stats */}
+          {!loading && (
+            <div className="px-5 pt-4 pb-6">
+              <p className="text-[10px] uppercase tracking-[0.08em] text-[#7d8590] mb-[10px]">Key Stats</p>
+              <div className="bg-[#0d1117] border border-[#21262d] rounded-md px-3 py-1">
+                <StatRow label="Market Cap" value={fmtMarketCap(fundamentals?.marketCap)} />
+                <StatRow
+                  label="P/E Ratio"
+                  value={
+                    fundamentals?.peRatio != null
+                      ? fmtNum(fundamentals.peRatio, { maximumFractionDigits: 2 })
+                      : null
+                  }
+                />
+                <StatRow label="EPS" value={fmtCurrency(fundamentals?.eps)} />
+                <StatRow label="52w High" value={fmtCurrency(fundamentals?.high52w)} />
+                <StatRow label="52w Low" value={fmtCurrency(fundamentals?.low52w)} />
+                <StatRow
+                  label="Dividend"
+                  value={
+                    fundamentals?.dividendYield != null
+                      ? `${fmtNum(fundamentals.dividendYield, { maximumFractionDigits: 2 })}%`
+                      : null
+                  }
+                />
+                <StatRow
+                  label="Beta"
+                  value={
+                    fundamentals?.beta != null
+                      ? fmtNum(fundamentals.beta, { maximumFractionDigits: 3 })
+                      : null
+                  }
+                />
+              </div>
+            </div>
           )}
         </div>
-
-        {/* Your position */}
-        {!loading && position && (
-          <div className="px-5 pt-4 border-t border-[#21262d]">
-            <p className="text-[10px] uppercase tracking-[0.08em] text-[#7d8590] mb-[10px]">Your Position</p>
-            <div className="bg-[#0d1117] border border-[#21262d] rounded-md px-3 py-1">
-              <StatRow
-                label="Shares"
-                value={fmtNum(position.totalShares, { maximumFractionDigits: 4 })}
-              />
-              <StatRow label="Avg Cost" value={fmtCurrency(position.avgCost)} />
-              <StatRow label="Total Value" value={fmtCurrency(position.totalValue)} />
-              <StatRow
-                label="Gain/Loss"
-                value={`${position.gainLoss >= 0 ? '+' : ''}${fmtCurrency(position.gainLoss)}`}
-                colored={position.gainLoss >= 0 ? 'text-[#34d399]' : 'text-[#f87171]'}
-              />
-              <StatRow
-                label="Gain/Loss %"
-                value={`${position.gainLoss >= 0 ? '+' : ''}${position.gainPct.toFixed(2)}%`}
-                colored={position.gainLoss >= 0 ? 'text-[#34d399]' : 'text-[#f87171]'}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Key stats */}
-        {!loading && (
-          <div className="px-5 pt-4 pb-6">
-            <p className="text-[10px] uppercase tracking-[0.08em] text-[#7d8590] mb-[10px]">Key Stats</p>
-            <div className="bg-[#0d1117] border border-[#21262d] rounded-md px-3 py-1">
-              <StatRow label="Market Cap" value={fmtMarketCap(fundamentals?.marketCap)} />
-              <StatRow
-                label="P/E Ratio"
-                value={
-                  fundamentals?.peRatio != null
-                    ? fmtNum(fundamentals.peRatio, { maximumFractionDigits: 2 })
-                    : null
-                }
-              />
-              <StatRow label="EPS" value={fmtCurrency(fundamentals?.eps)} />
-              <StatRow label="52w High" value={fmtCurrency(fundamentals?.high52w)} />
-              <StatRow label="52w Low" value={fmtCurrency(fundamentals?.low52w)} />
-              <StatRow
-                label="Dividend"
-                value={
-                  fundamentals?.dividendYield != null
-                    ? `${fmtNum(fundamentals.dividendYield, { maximumFractionDigits: 2 })}%`
-                    : null
-                }
-              />
-              <StatRow
-                label="Beta"
-                value={
-                  fundamentals?.beta != null
-                    ? fmtNum(fundamentals.beta, { maximumFractionDigits: 3 })
-                    : null
-                }
-              />
-            </div>
-          </div>
-        )}
       </div>
     </>
   )

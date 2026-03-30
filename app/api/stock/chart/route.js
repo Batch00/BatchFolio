@@ -11,16 +11,20 @@ export async function GET(request) {
   }
 
   const now = Math.floor(Date.now() / 1000)
-  const daysMap = { '30d': 30, '90d': 90, '1y': 365 }
-  const days = daysMap[range] ?? 30
-  const from = now - days * 86400
+  const ranges = {
+    '30d': { from: now - 30 * 24 * 60 * 60, resolution: 'D' },
+    '90d': { from: now - 90 * 24 * 60 * 60, resolution: 'D' },
+    '1y':  { from: now - 365 * 24 * 60 * 60, resolution: 'W' },
+  }
+  const { from, resolution } = ranges[range] ?? ranges['30d']
 
   try {
     const data = await finnhubFetch(
-      `/stock/candle?symbol=${ticker}&resolution=D&from=${from}&to=${now}`,
+      `/stock/candle?symbol=${ticker}&resolution=${resolution}&from=${from}&to=${now}`,
     )
 
     if (data.s === 'no_data' || !data.t) {
+      console.log('Finnhub no_data for:', ticker, 'range:', range)
       return NextResponse.json({ candles: [] })
     }
 

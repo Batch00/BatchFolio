@@ -91,7 +91,14 @@ body {
   animation: slide-in-up 200ms ease;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.stock-drawer-body {
+  flex: 1;
   overflow-y: auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
 }
 
 @media (min-width: 640px) {
@@ -106,5 +113,6 @@ body {
     border-left: 1px solid #10b981;
     border-radius: 0;
     animation: slide-in-right 200ms ease;
+    overflow: hidden;
   }
 }
