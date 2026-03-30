@@ -1,44 +1,62 @@
 import { NextResponse } from 'next/server'
-import { finnhubFetch } from '@/lib/finnhub'
+
+const RANGE_CONFIG = {
+  '30d': { resolution: 'D', days: 30 },
+  '90d': { resolution: 'D', days: 90 },
+  '1y':  { resolution: 'W', days: 365 },
+}
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
-  const ticker = searchParams.get('ticker')?.toUpperCase().trim()
+  const ticker = searchParams.get('ticker')
   const range = searchParams.get('range') || '30d'
 
   if (!ticker) {
-    return NextResponse.json({ error: 'ticker is required' }, { status: 400 })
+    return NextResponse.json({ error: 'ticker required' }, { status: 400 })
   }
 
-  const now = Math.floor(Date.now() / 1000)
-  const ranges = {
-    '30d': { from: now - 30 * 24 * 60 * 60, resolution: 'D' },
-    '90d': { from: now - 90 * 24 * 60 * 60, resolution: 'D' },
-    '1y':  { from: now - 365 * 24 * 60 * 60, resolution: 'W' },
-  }
-  const { from, resolution } = ranges[range] ?? ranges['30d']
+  const config = RANGE_CONFIG[range] || RANGE_CONFIG['30d']
+  const to = Math.floor(Date.now() / 1000)
+  const from = to - config.days * 24 * 60 * 60
+
+  const url = `https://finnhub.io/api/v1/stock/candle?symbol=${ticker.toUpperCase()}&resolution=${config.resolution}&from=${from}&to=${to}&token=${process.env.FINNHUB_API_KEY}`
 
   try {
-    const data = await finnhubFetch(
-      `/stock/candle?symbol=${ticker}&resolution=${resolution}&from=${from}&to=${now}`,
-    )
+    const res = await fetch(url, { cache: 'no-store' })
 
-    if (data.s === 'no_data' || !data.t) {
-      console.log('Finnhub no_data for:', ticker, 'range:', range)
-      return NextResponse.json({ candles: [] })
+    if (!res.ok) {
+      console.error('Finnhub error status:', res.status, 'ticker:', ticker)
+      return NextResponse.json({ candles: [] }, { status: 200 })
+    }
+
+    const text = await res.text()
+
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (parseErr) {
+      console.error('Failed to parse Finnhub response:', text)
+      return NextResponse.json({ candles: [] }, { status: 200 })
+    }
+
+    if (!data || data.s === 'no_data' || !data.t || !Array.isArray(data.t)) {
+      console.log('No data for ticker:', ticker, 'status:', data?.s)
+      return NextResponse.json({ candles: [] }, { status: 200 })
     }
 
     const candles = data.t.map((timestamp, i) => ({
       date: new Date(timestamp * 1000).toISOString().split('T')[0],
-      open: data.o[i],
-      high: data.h[i],
-      low: data.l[i],
-      close: data.c[i],
-      volume: data.v[i],
+      open:   data.o?.[i] ?? 0,
+      high:   data.h?.[i] ?? 0,
+      low:    data.l?.[i] ?? 0,
+      close:  data.c?.[i] ?? 0,
+      volume: data.v?.[i] ?? 0,
     }))
 
-    return NextResponse.json({ candles })
+    return NextResponse.json({ candles }, { status: 200 })
+
   } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    console.error('Chart route error:', err.message, 'ticker:', ticker)
+    return NextResponse.json({ candles: [] }, { status: 200 })
   }
 }
