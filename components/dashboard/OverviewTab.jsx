@@ -20,6 +20,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   const [holdings, setHoldings] = useState([])
   const [prices, setPrices] = useState({})
   const [sparklines, setSparklines] = useState({})
+  const [wlFundamentals, setWlFundamentals] = useState({})
   const [watchlist, setWatchlist] = useState([])
   const [liveLiabilities, setLiveLiabilities] = useState([])
   const [loading, setLoading] = useState(true)
@@ -83,22 +84,45 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
       liveLiabilitiesTotal: liveLiabTotal,
     })
 
-    // Fetch sparklines in background
+    // Fetch sparklines and watchlist fundamentals in background
+    const bgFetches = []
+
     if (holdingTickers.length > 0) {
-      Promise.all(
-        holdingTickers.map((t) =>
-          fetch(`/api/stock/chart?ticker=${t}&range=30d`)
-            .then((r) => r.json())
-            .then((d) => ({ t, closes: (d.candles ?? []).slice(-7).map((c) => c.close) }))
-            .catch(() => ({ t, closes: [] })),
-        ),
-      ).then((results) => {
-        const map = {}
-        results.forEach(({ t, closes }) => {
-          map[t] = closes
-        })
-        setSparklines(map)
-      })
+      bgFetches.push(
+        Promise.all(
+          holdingTickers.map((t) =>
+            fetch(`/api/stock/sparkline?ticker=${t}`)
+              .then((r) => r.json())
+              .then((d) => ({ t, prices: d.prices ?? [] }))
+              .catch(() => ({ t, prices: [] })),
+          ),
+        ).then((results) => {
+          const map = {}
+          results.forEach(({ t, prices }) => {
+            map[t] = prices
+          })
+          setSparklines(map)
+        }),
+      )
+    }
+
+    if (wlTickers.length > 0) {
+      bgFetches.push(
+        Promise.all(
+          wlTickers.map((t) =>
+            fetch(`/api/stock/fundamentals?ticker=${t}`)
+              .then((r) => r.json())
+              .then((f) => ({ t, f }))
+              .catch(() => ({ t, f: null })),
+          ),
+        ).then((results) => {
+          const map = {}
+          results.forEach(({ t, f }) => {
+            if (f) map[t] = f
+          })
+          setWlFundamentals(map)
+        }),
+      )
     }
   }, [onDataLoaded])
 
@@ -203,6 +227,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
         <WatchlistWidget
           loading={loading}
           watchlist={enrichedWatchlist.slice(0, 5)}
+          fundamentals={wlFundamentals}
           onOpenDrawer={onOpenDrawer}
         />
       </div>

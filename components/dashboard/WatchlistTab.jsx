@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Trash2 } from 'lucide-react'
+import RangeBar from '@/components/dashboard/RangeBar'
 
 const fmt = (v) => (v == null ? '--' : `$${Number(v).toFixed(2)}`)
 const fmtPct = (v) => (v == null ? '--' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`)
@@ -135,12 +136,12 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-[#21262d]">
-                {['Ticker', 'Company Name', 'Price', 'Change $', 'Change %', '52w High', '52w Low', ''].map(
+                {['Ticker', 'Company Name', 'Price', 'Change $', 'Change %', '52W Range', ''].map(
                   (h, i) => (
                     <th
                       key={i}
-                      className={`px-3 py-2.5 text-[10px] uppercase tracking-wider text-[#7d8590] whitespace-nowrap ${
-                        i === 0 || i === 1 ? 'text-left' : i === 7 ? 'text-right' : 'text-right'
+                      className={`px-3 py-2.5 text-[10px] uppercase tracking-wider text-[#7d8590] whitespace-nowrap font-mono ${
+                        i === 0 || i === 1 || i === 5 ? 'text-left' : i === 6 ? 'text-right' : 'text-right'
                       }`}
                     >
                       {h}
@@ -153,7 +154,7 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
               {loading ? (
                 [...Array(4)].map((_, i) => (
                   <tr key={i} className="border-b border-[#21262d]">
-                    {[...Array(8)].map((_, j) => (
+                    {[...Array(7)].map((_, j) => (
                       <td key={j} className="px-3 py-2.5">
                         <Skeleton className="h-4 w-16" />
                       </td>
@@ -162,7 +163,7 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                 ))
               ) : watchlist.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-[#7d8590]">
+                  <td colSpan={7} className="px-3 py-8 text-center text-[#7d8590]">
                     Your watchlist is empty.
                   </td>
                 </tr>
@@ -202,11 +203,18 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                       >
                         {q ? fmtPct(q.changePercent) : '--'}
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-[#7d8590] text-right whitespace-nowrap">
-                        {f ? fmtCurrency(f.high52w) : '--'}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono text-[#7d8590] text-right whitespace-nowrap">
-                        {f ? fmtCurrency(f.low52w) : '--'}
+                      <td className="px-3 py-2.5">
+                        {f && q ? (
+                          <RangeBar
+                            low={f.low52w}
+                            high={f.high52w}
+                            current={q.price}
+                            width={80}
+                            showLabels={true}
+                          />
+                        ) : (
+                          <span className="font-mono text-[#7d8590]">--</span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         <button

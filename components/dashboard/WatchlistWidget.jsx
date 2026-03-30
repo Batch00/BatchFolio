@@ -1,11 +1,12 @@
 'use client'
 
 import { Skeleton } from '@/components/ui/skeleton'
+import RangeBar from '@/components/dashboard/RangeBar'
 
 const fmt = (v) => (v == null ? '--' : `$${Number(v).toFixed(2)}`)
 const fmtPct = (v) => (v == null ? '--' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`)
 
-export default function WatchlistWidget({ loading, watchlist, onOpenDrawer }) {
+export default function WatchlistWidget({ loading, watchlist, fundamentals = {}, onOpenDrawer }) {
   return (
     <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4 h-full">
       <p className="text-[10px] uppercase text-[#7d8590] font-mono mb-[10px]" style={{ letterSpacing: '0.08em' }}>
@@ -26,6 +27,7 @@ export default function WatchlistWidget({ loading, watchlist, onOpenDrawer }) {
         <div className="divide-y divide-[#21262d]">
           {watchlist.map((w) => {
             const positive = (w.quote?.changePercent ?? 0) >= 0
+            const f = fundamentals[w.ticker]
             return (
               <button
                 key={w.id}
@@ -48,6 +50,17 @@ export default function WatchlistWidget({ loading, watchlist, onOpenDrawer }) {
                 >
                   {fmtPct(w.quote?.changePercent)}
                 </span>
+                {f && (
+                  <div className="flex-shrink-0">
+                    <RangeBar
+                      low={f.low52w}
+                      high={f.high52w}
+                      current={w.quote?.price}
+                      width={60}
+                      showLabels={false}
+                    />
+                  </div>
+                )}
               </button>
             )
           })}

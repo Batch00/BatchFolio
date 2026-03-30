@@ -4,37 +4,10 @@ import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Search } from 'lucide-react'
+import Sparkline from '@/components/dashboard/Sparkline'
 
 const fmt = (v) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v ?? 0)
-
-function Sparkline({ data, positive }) {
-  if (!data || data.length < 2) return <div className="w-[50px] h-[20px] flex-shrink-0" />
-  const min = Math.min(...data)
-  const max = Math.max(...data)
-  const range = max - min || 1
-  const W = 50
-  const H = 20
-  const points = data
-    .map((v, i) => {
-      const x = (i / (data.length - 1)) * W
-      const y = H - ((v - min) / range) * (H - 4) - 2
-      return `${x},${y}`
-    })
-    .join(' ')
-  return (
-    <svg width={W} height={H} className="overflow-visible flex-shrink-0">
-      <polyline
-        points={points}
-        fill="none"
-        stroke={positive ? '#34d399' : '#f87171'}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
 
 export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDrawer }) {
   const [search, setSearch] = useState('')
@@ -91,7 +64,7 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
                 <span className="text-xs text-[#7d8590] flex-1 min-w-0 truncate">
                   {h.name || h.ticker}
                 </span>
-                <Sparkline data={sparklines[h.ticker]} positive={h.positive} />
+                <Sparkline prices={sparklines[h.ticker]} positive={h.positive} />
                 <span className="font-mono text-xs text-[#e6edf3] w-20 text-right flex-shrink-0">
                   {fmt(h.value)}
                 </span>

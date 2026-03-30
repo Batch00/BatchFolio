@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { ChevronUp, ChevronDown } from 'lucide-react'
+import Sparkline from '@/components/dashboard/Sparkline'
 
 const fmt = (v) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v ?? 0)
@@ -20,6 +21,7 @@ const COLS = [
   { key: 'shares', label: 'Shares', numeric: true },
   { key: 'avgCost', label: 'Avg Cost', numeric: true },
   { key: 'livePrice', label: 'Live Price', numeric: true },
+  { key: 'sparkline', label: '7D', numeric: true, noSort: true },
   { key: 'value', label: 'Value', numeric: true },
   { key: 'gainLoss', label: 'Gain/Loss $', numeric: true },
   { key: 'gainPct', label: 'Gain/Loss %', numeric: true },
@@ -37,6 +39,7 @@ function SortIcon({ dir }) {
 export default function PortfolioTab({ onOpenDrawer }) {
   const supabase = createClient()
   const [rows, setRows] = useState([])
+  const [sparklines, setSparklines] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [sortKey, setSortKey] = useState('value')
@@ -89,6 +92,24 @@ export default function PortfolioTab({ onOpenDrawer }) {
 
     setRows(enriched)
     setLoading(false)
+
+    // Fetch sparklines in background
+    if (tickers.length > 0) {
+      Promise.all(
+        tickers.map((t) =>
+          fetch(`/api/stock/sparkline?ticker=${t}`)
+            .then((r) => r.json())
+            .then((d) => ({ t, prices: d.prices ?? [] }))
+            .catch(() => ({ t, prices: [] })),
+        ),
+      ).then((results) => {
+        const map = {}
+        results.forEach(({ t, prices }) => {
+          map[t] = prices
+        })
+        setSparklines(map)
+      })
+    }
   }, [])
 
   useEffect(() => {
@@ -200,13 +221,13 @@ export default function PortfolioTab({ onOpenDrawer }) {
                 {COLS.map((col) => (
                   <th
                     key={col.key}
-                    onClick={() => handleSort(col.key)}
-                    className={`px-3 py-2.5 text-[10px] uppercase tracking-wider text-[#7d8590] cursor-pointer hover:text-[#e6edf3] select-none whitespace-nowrap ${
-                      col.numeric ? 'text-right' : 'text-left'
-                    }`}
+                    onClick={col.noSort ? undefined : () => handleSort(col.key)}
+                    className={`px-3 py-2.5 text-[10px] uppercase tracking-wider text-[#7d8590] whitespace-nowrap font-mono ${
+                      col.noSort ? '' : 'cursor-pointer hover:text-[#e6edf3] select-none'
+                    } ${col.numeric ? 'text-right' : 'text-left'}`}
                   >
                     {col.label}
-                    <SortIcon dir={sortKey === col.key ? sortDir : null} />
+                    {!col.noSort && <SortIcon dir={sortKey === col.key ? sortDir : null} />}
                   </th>
                 ))}
               </tr>
@@ -251,6 +272,28 @@ export default function PortfolioTab({ onOpenDrawer }) {
                       </td>
                       <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right">
                         {fmt(h.livePrice)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        {sparklines[h.ticker] ? (
+                          <div className="inline-flex justify-end">
+                            <Sparkline
+                              prices={sparklines[h.ticker]}
+                              positive={h.gainLoss >= 0}
+                              width={60}
+                              height={28}
+                            />
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              display: 'inline-block',
+                              width: 60,
+                              height: 28,
+                              background: '#21262d',
+                              borderRadius: 2,
+                            }}
+                          />
+                        )}
                       </td>
                       <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right">
                         {fmt(h.value)}
