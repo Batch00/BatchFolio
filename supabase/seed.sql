@@ -11,64 +11,47 @@
 -- ============================================================
 -- Accounts
 -- ============================================================
-INSERT INTO accounts (id, user_id, name, type, provider, created_at) VALUES
-  ('aaaaaaaa-0001-0000-0000-000000000001', '5855432c-fc23-48dd-8a36-825bee0a03a8', 'Fidelity Brokerage', 'brokerage', 'Fidelity', now() - interval '180 days'),
-  ('aaaaaaaa-0001-0000-0000-000000000002', '5855432c-fc23-48dd-8a36-825bee0a03a8', 'Vanguard 401k', 'retirement', 'Vanguard', now() - interval '180 days'),
-  ('aaaaaaaa-0001-0000-0000-000000000003', '5855432c-fc23-48dd-8a36-825bee0a03a8', 'Robinhood', 'brokerage', 'Robinhood', now() - interval '180 days');
+ALTER TABLE batchfolio.net_worth_snapshots
+  ADD CONSTRAINT snapshots_user_date_unique
+  UNIQUE (user_id, date);
 
--- ============================================================
--- Holdings - Fidelity Brokerage
--- ============================================================
-INSERT INTO holdings (account_id, ticker, shares, avg_cost_basis, updated_at) VALUES
+INSERT INTO batchfolio.accounts (id, user_id, name, type, provider, created_at) VALUES
+  ('aaaaaaaa-0001-0000-0000-000000000001', '47c88099-a0b4-424e-a056-1ac108cefb48', 'Fidelity Brokerage', 'brokerage', 'Fidelity', now() - interval '180 days'),
+  ('aaaaaaaa-0001-0000-0000-000000000002', '47c88099-a0b4-424e-a056-1ac108cefb48', 'Vanguard 401k', 'retirement', 'Vanguard', now() - interval '180 days'),
+  ('aaaaaaaa-0001-0000-0000-000000000003', '47c88099-a0b4-424e-a056-1ac108cefb48', 'Robinhood', 'brokerage', 'Robinhood', now() - interval '180 days');
+
+INSERT INTO batchfolio.holdings (account_id, ticker, shares, avg_cost_basis, updated_at) VALUES
   ('aaaaaaaa-0001-0000-0000-000000000001', 'AAPL',  45,  142.50, now()),
   ('aaaaaaaa-0001-0000-0000-000000000001', 'MSFT',  28,  285.00, now()),
   ('aaaaaaaa-0001-0000-0000-000000000001', 'NVDA',  12,  410.00, now()),
-  ('aaaaaaaa-0001-0000-0000-000000000001', 'VTI',   60,  195.00, now());
-
--- Holdings - Vanguard 401k
-INSERT INTO holdings (account_id, ticker, shares, avg_cost_basis, updated_at) VALUES
+  ('aaaaaaaa-0001-0000-0000-000000000001', 'VTI',   60,  195.00, now()),
   ('aaaaaaaa-0001-0000-0000-000000000002', 'VTSAX', 180,  88.00, now()),
   ('aaaaaaaa-0001-0000-0000-000000000002', 'VTIAX',  90,  62.00, now()),
-  ('aaaaaaaa-0001-0000-0000-000000000002', 'VBTLX',  45,   9.80, now());
-
--- Holdings - Robinhood
-INSERT INTO holdings (account_id, ticker, shares, avg_cost_basis, updated_at) VALUES
+  ('aaaaaaaa-0001-0000-0000-000000000002', 'VBTLX',  45,   9.80, now()),
   ('aaaaaaaa-0001-0000-0000-000000000003', 'TSLA',   8, 220.00, now()),
   ('aaaaaaaa-0001-0000-0000-000000000003', 'AMZN',  15, 148.00, now()),
   ('aaaaaaaa-0001-0000-0000-000000000003', 'SPY',   20, 410.00, now());
 
--- ============================================================
--- Liabilities
--- ============================================================
-INSERT INTO liabilities (user_id, name, type, balance, interest_rate, created_at) VALUES
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', 'Student Loan', 'loan', 18400.00, 4.5,  now() - interval '365 days'),
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', 'Car Loan',     'loan',  9200.00, 6.2,  now() - interval '365 days');
+INSERT INTO batchfolio.liabilities (user_id, name, type, balance, interest_rate, created_at) VALUES
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', 'Student Loan', 'loan', 18400.00, 4.5, now() - interval '365 days'),
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', 'Car Loan',     'loan',  9200.00, 6.2, now() - interval '365 days');
 
--- ============================================================
--- Net worth snapshots (12 months, realistic variance)
--- Note: in production these rows are auto-generated nightly
--- by the auto-snapshot edge function. The rows below are
--- seeded for demo purposes only.
--- ============================================================
-INSERT INTO net_worth_snapshots (user_id, date, total_assets, total_liabilities, net_worth) VALUES
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', (current_date - interval '11 months')::date, 207600,  27600, 180000),
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', (current_date - interval '10 months')::date, 219800,  27300, 192500),
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', (current_date - interval '9 months')::date,  215200,  27000, 188200),
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', (current_date - interval '8 months')::date,  232400,  26700, 205700),
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', (current_date - interval '7 months')::date,  242000,  26500, 215500),
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', (current_date - interval '6 months')::date,  236800,  26200, 210600),
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', (current_date - interval '5 months')::date,  254200,  25900, 228300),
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', (current_date - interval '4 months')::date,  266000,  25600, 240400),
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', (current_date - interval '3 months')::date,  277800,  25300, 252500),
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', (current_date - interval '2 months')::date,  283500,  25000, 258500),
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', (current_date - interval '1 month')::date,   295400,  24700, 270700),
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', current_date,                                 309200,  24400, 284800);
+INSERT INTO batchfolio.net_worth_snapshots (user_id, date, total_assets, total_liabilities, net_worth) VALUES
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', (current_date - interval '11 months')::date, 207600, 27600, 180000),
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', (current_date - interval '10 months')::date, 219800, 27300, 192500),
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', (current_date - interval '9 months')::date,  215200, 27000, 188200),
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', (current_date - interval '8 months')::date,  232400, 26700, 205700),
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', (current_date - interval '7 months')::date,  242000, 26500, 215500),
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', (current_date - interval '6 months')::date,  236800, 26200, 210600),
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', (current_date - interval '5 months')::date,  254200, 25900, 228300),
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', (current_date - interval '4 months')::date,  266000, 25600, 240400),
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', (current_date - interval '3 months')::date,  277800, 25300, 252500),
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', (current_date - interval '2 months')::date,  283500, 25000, 258500),
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', (current_date - interval '1 month')::date,   295400, 24700, 270700),
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', current_date,                                309200, 24400, 284800);
 
--- ============================================================
--- Watchlist
--- ============================================================
-INSERT INTO watchlist (user_id, ticker, added_at) VALUES
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', 'QQQ',  now() - interval '60 days'),
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', 'GLD',  now() - interval '45 days'),
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', 'AMD',  now() - interval '30 days'),
-  ('5855432c-fc23-48dd-8a36-825bee0a03a8', 'PLTR', now() - interval '15 days');
+INSERT INTO batchfolio.watchlist (user_id, ticker, added_at) VALUES
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', 'QQQ',  now() - interval '60 days'),
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', 'GLD',  now() - interval '45 days'),
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', 'AMD',  now() - interval '30 days'),
+  ('47c88099-a0b4-424e-a056-1ac108cefb48', 'PLTR', now() - interval '15 days');
