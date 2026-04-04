@@ -4,12 +4,12 @@ import { PieChart, Pie, Cell, Tooltip, Label, ResponsiveContainer } from 'rechar
 import { Skeleton } from '@/components/ui/skeleton'
 
 const SLICE_COLORS = [
-  '#10b981', // emerald
-  '#3b82f6', // blue
-  '#f59e0b', // amber
-  '#8b5cf6', // violet
-  '#ef4444', // red
-  '#06b6d4', // cyan
+  '#10b981',
+  '#3b82f6',
+  '#f59e0b',
+  '#8b5cf6',
+  '#ef4444',
+  '#06b6d4',
 ]
 
 function fmtCompact(v) {
@@ -17,6 +17,9 @@ function fmtCompact(v) {
   if (v >= 1_000) return `$${Math.round(v / 1_000)}k`
   return `$${Math.round(v)}`
 }
+
+const fmt = (v) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
 
 export default function AllocationWidget({ loading, holdings }) {
   const total = holdings.reduce((s, h) => s + h.value, 0)
@@ -27,24 +30,26 @@ export default function AllocationWidget({ loading, holdings }) {
     pct: total > 0 ? (h.value / total) * 100 : 0,
   }))
 
-  const twoCol = data.length > 3
-
   return (
-    <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4 h-full">
-      <p className="text-[10px] uppercase text-[#7d8590] font-mono mb-[10px]" style={{ letterSpacing: '0.08em' }}>
+    <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4">
+      <p
+        className="text-[10px] uppercase text-[#7d8590] font-mono mb-[10px]"
+        style={{ letterSpacing: '0.08em' }}
+      >
         Allocation
       </p>
 
       {loading ? (
-        <Skeleton className="h-40" />
+        <Skeleton className="h-[120px]" />
       ) : data.length === 0 ? (
-        <div className="min-h-[160px] flex items-center justify-center text-xs text-[#7d8590]">
+        <div className="min-h-[80px] flex items-center justify-center text-xs text-[#7d8590]">
           No holdings yet.
         </div>
       ) : (
-        <>
-          <div className="flex justify-center mb-3">
-            <ResponsiveContainer width="100%" height={120}>
+        <div className="flex items-center gap-6">
+          {/* Donut chart */}
+          <div className="flex-shrink-0" style={{ width: 120, height: 120 }}>
+            <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={data}
@@ -94,41 +99,29 @@ export default function AllocationWidget({ loading, holdings }) {
             </ResponsiveContainer>
           </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: twoCol ? '1fr 1fr' : '1fr',
-              gap: 6,
-            }}
-          >
+          {/* Legend pills */}
+          <div className="flex flex-wrap gap-2 flex-1">
             {data.map((d, i) => (
-              <div key={d.ticker} className="flex items-center gap-1.5 min-w-0">
+              <div
+                key={d.ticker}
+                className="flex items-center gap-1.5 bg-[#0d1117] rounded px-2.5 py-1.5"
+              >
                 <span
                   style={{
-                    width: 7,
-                    height: 7,
+                    width: 8,
+                    height: 8,
                     borderRadius: '50%',
                     flexShrink: 0,
                     background: SLICE_COLORS[i % SLICE_COLORS.length],
                   }}
                 />
-                <span
-                  className="font-mono truncate"
-                  style={{ fontSize: 10, color: '#7d8590', flex: 1, minWidth: 0 }}
-                  title={d.ticker}
-                >
-                  {d.ticker.slice(0, 10)}
-                </span>
-                <span
-                  className="font-mono flex-shrink-0"
-                  style={{ fontSize: 10, color: '#e6edf3' }}
-                >
-                  {d.pct.toFixed(1)}%
-                </span>
+                <span className="font-mono text-[11px] text-[#7d8590]">{d.ticker}</span>
+                <span className="font-mono text-[11px] text-[#e6edf3]">{d.pct.toFixed(1)}%</span>
+                <span className="font-mono text-[10px] text-[#7d8590]">{fmt(d.value)}</span>
               </div>
             ))}
           </div>
-        </>
+        </div>
       )}
     </div>
   )

@@ -25,6 +25,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   const [liveLiabilities, setLiveLiabilities] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [range, setRange] = useState('today')
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -143,9 +144,48 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     (sum, h) => sum + h.shares * (prices[h.ticker]?.price ?? 0),
     0,
   )
-  const portfolioYesterday = portfolioValue - dayChange
-  const dayChangePct = portfolioYesterday > 0 ? (dayChange / portfolioYesterday) * 100 : 0
-  const dayPositive = dayChange >= 0
+
+  // Total cost basis (invested)
+  const totalInvested = holdings.reduce(
+    (sum, h) => sum + h.shares * h.avg_cost_basis,
+    0,
+  )
+
+  // Calculate change based on selected range
+  function getChangeForRange() {
+    if (snapshots.length === 0) return { changeDollar: 0, changePct: 0 }
+    const latestNw = latest?.net_worth ?? 0
+
+    if (range === 'today') {
+      const portfolioYesterday = portfolioValue - dayChange
+      const pct = portfolioYesterday > 0 ? (dayChange / portfolioYesterday) * 100 : 0
+      return { changeDollar: dayChange, changePct: pct }
+    }
+
+    const daysBack = range === '30d' ? 30 : range === '90d' ? 90 : 365
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - daysBack)
+    const cutoffStr = cutoff.toISOString().split('T')[0]
+
+    // Find snapshot closest to cutoff date
+    let closest = snapshots[0]
+    let closestDist = Infinity
+    for (const s of snapshots) {
+      const dist = Math.abs(new Date(s.date).getTime() - cutoff.getTime())
+      if (dist < closestDist) {
+        closestDist = dist
+        closest = s
+      }
+    }
+
+    const oldNw = closest?.net_worth ?? 0
+    const changeDollar = latestNw - oldNw
+    const changePct = oldNw > 0 ? (changeDollar / oldNw) * 100 : 0
+    return { changeDollar, changePct }
+  }
+
+  const { changeDollar, changePct } = getChangeForRange()
+  const changePositive = changeDollar >= 0
 
   const enrichedHoldings = holdings
     .map((h) => {
@@ -158,6 +198,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
         ...h,
         livePrice,
         value,
+        costBasis,
         gainLoss,
         gainPct,
         positive: gainLoss >= 0,
@@ -171,53 +212,41 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     quote: prices[w.ticker] ?? null,
   }))
 
+  const rangeLabel =
+    range === 'today' ? 'today' : range === '30d' ? 'past 30 days' : range === '90d' ? 'past 90 days' : 'past year'
+
   return (
     <div className="px-4 md:px-6 py-4 min-h-[calc(100vh-48px)] flex flex-col gap-4">
       {error && <p className="text-xs text-[#f87171]">{error}</p>}
 
-      {/* Mobile net worth hero - shown only on mobile */}
-      <div className="md:hidden text-center py-4">
-        {loading ? (
-          <>
-            <div className="h-10 w-44 bg-[#21262d] rounded animate-pulse mx-auto mb-2" />
-            <div className="h-4 w-28 bg-[#21262d] rounded animate-pulse mx-auto" />
-          </>
-        ) : (
-          <>
-            <p className="font-mono text-4xl font-semibold text-[#e6edf3] leading-none mb-2">
-              {fmtLarge(netWorth)}
-            </p>
-            <p className={`font-mono text-sm ${dayPositive ? 'text-[#34d399]' : 'text-[#f87171]'}`}>
-              {dayPositive ? '+' : ''}
-              {fmtLarge(dayChange)} today
-            </p>
-          </>
-        )}
-      </div>
-
-      {/* Hero row: net worth | trend chart (2x) | allocation */}
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_1fr] gap-4">
+      {/* Row 1: Hero - Net Worth (40%) + Trend Chart (60%) */}
+      <div className="grid grid-cols-1 md:grid-cols-[2fr_3fr] gap-4">
         <NetWorthWidget
           loading={loading}
           netWorth={netWorth}
           totalAssets={totalAssets}
           totalLiabilities={liveLiabilitiesTotal}
-          dayChange={dayChange}
-          dayChangePct={dayChangePct}
-          dayPositive={dayPositive}
+          totalInvested={totalInvested}
+          changeDollar={changeDollar}
+          changePct={changePct}
+          changePositive={changePositive}
+          rangeLabel={rangeLabel}
+          range={range}
+          onRangeChange={setRange}
         />
-        <TrendChart loading={loading} snapshots={snapshots} />
-        <AllocationWidget loading={loading} holdings={enrichedHoldings} />
+        <TrendChart loading={loading} snapshots={snapshots} range={range} />
       </div>
 
-      {/* Bottom widget grid */}
-      <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr_1fr] gap-4">
-        <HoldingsWidget
-          loading={loading}
-          holdings={enrichedHoldings.slice(0, 8)}
-          sparklines={sparklines}
-          onOpenDrawer={onOpenDrawer}
-        />
+      {/* Row 2: Full width holdings */}
+      <HoldingsWidget
+        loading={loading}
+        holdings={enrichedHoldings}
+        sparklines={sparklines}
+        onOpenDrawer={onOpenDrawer}
+      />
+
+      {/* Row 3: Movers + Watchlist */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <MoversWidget
           loading={loading}
           holdings={enrichedHoldings}
@@ -231,6 +260,9 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
           onOpenDrawer={onOpenDrawer}
         />
       </div>
+
+      {/* Row 4: Full width allocation */}
+      <AllocationWidget loading={loading} holdings={enrichedHoldings} />
     </div>
   )
 }

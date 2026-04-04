@@ -21,10 +21,27 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
       )
     : holdings
 
+  const headers = [
+    { label: 'Ticker', align: 'text-left', width: 'w-[52px]' },
+    { label: 'Name', align: 'text-left', width: 'flex-1' },
+    { label: '', align: '', width: 'w-[60px]' },
+    { label: 'Shares', align: 'text-right', width: 'w-[60px]' },
+    { label: 'Avg Cost', align: 'text-right', width: 'w-[80px]' },
+    { label: 'Price', align: 'text-right', width: 'w-[80px]' },
+    { label: 'Value', align: 'text-right', width: 'w-[80px]' },
+    { label: 'Gain/Loss', align: 'text-right', width: 'w-[80px]' },
+    { label: 'Return', align: 'text-right', width: 'w-[70px]' },
+  ]
+
   return (
-    <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4 h-full">
+    <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4">
       <div className="flex items-center justify-between mb-[10px]">
-        <p className="text-[10px] uppercase text-[#7d8590] font-mono" style={{ letterSpacing: '0.08em' }}>Holdings</p>
+        <p
+          className="text-[10px] uppercase text-[#7d8590] font-mono"
+          style={{ letterSpacing: '0.08em' }}
+        >
+          Holdings
+        </p>
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-[#7d8590] pointer-events-none" />
           <Input
@@ -48,28 +65,60 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
         </div>
       ) : (
         <>
+          {/* Column headers - desktop only */}
+          <div className="hidden md:flex items-center gap-2 px-1 mb-1">
+            {headers.map((h, i) => (
+              <span
+                key={i}
+                className={`text-[#7d8590] font-mono ${h.align} ${h.width} flex-shrink-0`}
+                style={{ fontSize: 10, letterSpacing: '0.05em', textTransform: 'uppercase' }}
+              >
+                {h.label}
+              </span>
+            ))}
+          </div>
+
           <div className="divide-y divide-[#21262d]">
-            {/* On mobile show max 4 rows unless expanded; on desktop show all */}
             {filtered.map((h, i) => (
               <button
                 key={h.id}
                 onClick={() => onOpenDrawer(h.ticker)}
-                className={`w-full flex items-center gap-2 py-2.5 text-left hover:bg-[#0d1117] transition-colors rounded min-h-[44px] ${
-                  i >= 4 && !mobileExpanded ? 'hidden sm:flex' : ''
+                className={`w-full flex items-center gap-2 py-2 text-left hover:bg-[#0d1117] transition-colors rounded ${
+                  i >= 6 && !mobileExpanded ? 'hidden sm:flex' : ''
                 }`}
+                style={{ height: 40 }}
               >
                 <span className="font-mono text-xs text-[#10b981] w-[52px] flex-shrink-0">
                   {h.ticker}
                 </span>
-                <span className="text-xs text-[#7d8590] flex-1 min-w-0 truncate">
+                <span className="text-xs text-[#7d8590] flex-1 min-w-0 truncate hidden md:block">
                   {h.name || h.ticker}
                 </span>
-                <Sparkline prices={sparklines[h.ticker]} positive={h.positive} />
-                <span className="font-mono text-xs text-[#e6edf3] w-20 text-right flex-shrink-0">
+                <span className="w-[60px] flex-shrink-0 hidden md:block">
+                  <Sparkline prices={sparklines[h.ticker]} positive={h.positive} />
+                </span>
+                <span className="font-mono text-xs text-[#e6edf3] w-[60px] text-right flex-shrink-0 hidden md:block">
+                  {h.shares}
+                </span>
+                <span className="font-mono text-xs text-[#7d8590] w-[80px] text-right flex-shrink-0 hidden md:block">
+                  {fmt(h.avg_cost_basis)}
+                </span>
+                <span className="font-mono text-xs text-[#e6edf3] w-[80px] text-right flex-shrink-0 hidden md:block">
+                  {fmt(h.livePrice)}
+                </span>
+                <span className="font-mono text-xs text-[#e6edf3] w-[80px] text-right flex-shrink-0 font-semibold">
                   {fmt(h.value)}
                 </span>
                 <span
-                  className={`font-mono text-xs w-14 text-right flex-shrink-0 ${
+                  className={`font-mono text-xs w-[80px] text-right flex-shrink-0 hidden md:block ${
+                    h.positive ? 'text-[#34d399]' : 'text-[#f87171]'
+                  }`}
+                >
+                  {h.positive ? '+' : ''}
+                  {fmt(h.gainLoss)}
+                </span>
+                <span
+                  className={`font-mono text-xs w-[70px] text-right flex-shrink-0 font-semibold ${
                     h.positive ? 'text-[#34d399]' : 'text-[#f87171]'
                   }`}
                 >
@@ -79,8 +128,8 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
               </button>
             ))}
           </div>
-          {/* Mobile see-all / collapse toggle */}
-          {filtered.length > 4 && (
+
+          {filtered.length > 6 && (
             <button
               onClick={() => setMobileExpanded((v) => !v)}
               className="sm:hidden w-full text-center text-[11px] text-[#10b981] hover:text-[#34d399] pt-2 transition-colors"

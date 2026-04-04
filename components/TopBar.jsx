@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Settings, LayoutDashboard, Briefcase, PieChart, Star, ShieldCheck } from 'lucide-react'
+import TickerSearch from '@/components/dashboard/TickerSearch'
 
 const TABS = [
   { id: 'overview',  label: 'OVERVIEW',  icon: LayoutDashboard },
@@ -367,13 +368,23 @@ export default function TopBar({
                 </div>
                 <div className="space-y-1.5">
                   <Label>Ticker Symbol</Label>
-                  <Input
-                    value={holdTicker}
-                    onChange={(e) => setHoldTicker(e.target.value.toUpperCase())}
-                    placeholder="AAPL"
-                    className="font-mono uppercase"
-                    required
-                  />
+                  {holdTicker ? (
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sm text-[#10b981]">{holdTicker}</span>
+                      <button
+                        type="button"
+                        onClick={() => setHoldTicker('')}
+                        className="text-[10px] text-[#7d8590] hover:text-[#e6edf3] transition-colors"
+                      >
+                        change
+                      </button>
+                    </div>
+                  ) : (
+                    <TickerSearch
+                      placeholder="Search ticker..."
+                      onSelect={(ticker) => setHoldTicker(ticker)}
+                    />
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label>Shares</Label>
@@ -407,13 +418,23 @@ export default function TopBar({
             {addType === 'watchlist' && (
               <div className="space-y-1.5">
                 <Label>Ticker Symbol</Label>
-                <Input
-                  value={wlTicker}
-                  onChange={(e) => setWlTicker(e.target.value.toUpperCase())}
-                  placeholder="AAPL"
-                  className="font-mono uppercase"
-                  required
-                />
+                {wlTicker ? (
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm text-[#10b981]">{wlTicker}</span>
+                    <button
+                      type="button"
+                      onClick={() => setWlTicker('')}
+                      className="text-[10px] text-[#7d8590] hover:text-[#e6edf3] transition-colors"
+                    >
+                      change
+                    </button>
+                  </div>
+                ) : (
+                  <TickerSearch
+                    placeholder="Search ticker..."
+                    onSelect={(ticker) => setWlTicker(ticker)}
+                  />
+                )}
               </div>
             )}
 

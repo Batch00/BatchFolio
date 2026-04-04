@@ -38,7 +38,7 @@ Deno.serve(async () => {
     .from('accounts')
     .insert([
       { user_id: uid, name: 'Fidelity Brokerage', type: 'brokerage', provider: 'Fidelity' },
-      { user_id: uid, name: 'Vanguard 401k', type: 'retirement', provider: 'Vanguard' },
+      { user_id: uid, name: 'Vanguard Retirement', type: 'retirement', provider: 'Vanguard' },
       { user_id: uid, name: 'Robinhood', type: 'brokerage', provider: 'Robinhood' },
     ])
     .select('id, name')
@@ -48,21 +48,21 @@ Deno.serve(async () => {
   }
 
   const fidelityId = accounts.find((a) => a.name === 'Fidelity Brokerage')?.id
-  const vanguardId = accounts.find((a) => a.name === 'Vanguard 401k')?.id
+  const vanguardId = accounts.find((a) => a.name === 'Vanguard Retirement')?.id
   const robinhoodId = accounts.find((a) => a.name === 'Robinhood')?.id
 
   // Insert holdings
   await supabase.from('holdings').insert([
-    { account_id: fidelityId, ticker: 'AAPL', shares: 45, avg_cost_basis: 142.50 },
-    { account_id: fidelityId, ticker: 'MSFT', shares: 28, avg_cost_basis: 285.00 },
-    { account_id: fidelityId, ticker: 'NVDA', shares: 12, avg_cost_basis: 410.00 },
-    { account_id: fidelityId, ticker: 'VTI',  shares: 60, avg_cost_basis: 195.00 },
-    { account_id: vanguardId, ticker: 'VTSAX', shares: 180, avg_cost_basis: 88.00 },
-    { account_id: vanguardId, ticker: 'VTIAX', shares: 90,  avg_cost_basis: 62.00 },
-    { account_id: vanguardId, ticker: 'VBTLX', shares: 45,  avg_cost_basis: 9.80 },
-    { account_id: robinhoodId, ticker: 'TSLA', shares: 8,  avg_cost_basis: 220.00 },
-    { account_id: robinhoodId, ticker: 'AMZN', shares: 15, avg_cost_basis: 148.00 },
-    { account_id: robinhoodId, ticker: 'SPY',  shares: 20, avg_cost_basis: 410.00 },
+    { account_id: fidelityId, ticker: 'AAPL', shares: 22, avg_cost_basis: 142.50 },
+    { account_id: fidelityId, ticker: 'MSFT', shares: 14, avg_cost_basis: 285.00 },
+    { account_id: fidelityId, ticker: 'VTI',  shares: 30, avg_cost_basis: 195.00 },
+    { account_id: fidelityId, ticker: 'SPY',  shares: 10, avg_cost_basis: 410.00 },
+    { account_id: vanguardId, ticker: 'VTI',  shares: 40, avg_cost_basis: 185.00 },
+    { account_id: vanguardId, ticker: 'VXUS', shares: 35, avg_cost_basis: 52.00 },
+    { account_id: vanguardId, ticker: 'BND',  shares: 50, avg_cost_basis: 72.00 },
+    { account_id: robinhoodId, ticker: 'TSLA', shares: 5,  avg_cost_basis: 220.00 },
+    { account_id: robinhoodId, ticker: 'AMZN', shares: 8,  avg_cost_basis: 148.00 },
+    { account_id: robinhoodId, ticker: 'NVDA', shares: 4,  avg_cost_basis: 410.00 },
   ])
 
   // Insert liabilities
@@ -73,18 +73,18 @@ Deno.serve(async () => {
 
   // Insert 12 monthly net worth snapshots
   const snapshots = [
-    { months: 11, assets: 207600, liabilities: 27600, nw: 180000 },
-    { months: 10, assets: 219800, liabilities: 27300, nw: 192500 },
-    { months: 9,  assets: 215200, liabilities: 27000, nw: 188200 },
-    { months: 8,  assets: 232400, liabilities: 26700, nw: 205700 },
-    { months: 7,  assets: 242000, liabilities: 26500, nw: 215500 },
-    { months: 6,  assets: 236800, liabilities: 26200, nw: 210600 },
-    { months: 5,  assets: 254200, liabilities: 25900, nw: 228300 },
-    { months: 4,  assets: 266000, liabilities: 25600, nw: 240400 },
-    { months: 3,  assets: 277800, liabilities: 25300, nw: 252500 },
-    { months: 2,  assets: 283500, liabilities: 25000, nw: 258500 },
-    { months: 1,  assets: 295400, liabilities: 24700, nw: 270700 },
-    { months: 0,  assets: 309200, liabilities: 24400, nw: 284800 },
+    { months: 12, assets: 48000, liabilities: 29000, nw: 19000 },
+    { months: 11, assets: 49200, liabilities: 28600, nw: 20600 },
+    { months: 10, assets: 51000, liabilities: 28200, nw: 22800 },
+    { months: 9,  assets: 50400, liabilities: 27800, nw: 22600 },
+    { months: 8,  assets: 53000, liabilities: 27400, nw: 25600 },
+    { months: 7,  assets: 55500, liabilities: 27000, nw: 28500 },
+    { months: 6,  assets: 54200, liabilities: 26800, nw: 27400 },
+    { months: 5,  assets: 57000, liabilities: 26600, nw: 30400 },
+    { months: 4,  assets: 59500, liabilities: 26400, nw: 33100 },
+    { months: 3,  assets: 61000, liabilities: 26200, nw: 34800 },
+    { months: 2,  assets: 63500, liabilities: 26000, nw: 37500 },
+    { months: 1,  assets: 66000, liabilities: 27600, nw: 38400 },
   ]
 
   const snapshotRows = snapshots.map(({ months, assets, liabilities, nw }) => {

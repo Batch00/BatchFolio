@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Trash2 } from 'lucide-react'
 import RangeBar from '@/components/dashboard/RangeBar'
+import TickerSearch from '@/components/dashboard/TickerSearch'
 
 const fmt = (v) => (v == null ? '--' : `$${Number(v).toFixed(2)}`)
 const fmtPct = (v) => (v == null ? '--' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`)
@@ -22,7 +23,6 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
   const [fundamentals, setFundamentals] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [tickerInput, setTickerInput] = useState('')
   const [addError, setAddError] = useState(null)
   const [adding, setAdding] = useState(false)
 
@@ -84,21 +84,18 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     loadWatchlist()
   }, [loadWatchlist])
 
-  async function addTicker(e) {
-    e.preventDefault()
+  async function addTicker(ticker) {
     if (isDemo) { onDemoBlock?.(); return }
-    const ticker = tickerInput.toUpperCase().trim()
     if (!ticker) return
     setAdding(true)
     setAddError(null)
     const {
       data: { user },
     } = await supabase.auth.getUser()
-    const { error: err } = await supabase.from('watchlist').insert({ user_id: user.id, ticker })
+    const { error: err } = await supabase.from('watchlist').insert({ user_id: user.id, ticker: ticker.toUpperCase().trim() })
     if (err) {
       setAddError(err.code === '23505' ? `${ticker} already in watchlist.` : err.message)
     } else {
-      setTickerInput('')
       await loadWatchlist()
     }
     setAdding(false)
@@ -113,18 +110,12 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
   return (
     <div className="p-4">
       {/* Add ticker */}
-      <div className="mb-4">
-        <form onSubmit={addTicker} className="flex gap-2 max-w-sm">
-          <Input
-            value={tickerInput}
-            onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
-            placeholder="Add ticker..."
-            className="font-mono uppercase h-8 text-xs bg-[#161b22] border-[#21262d]"
-          />
-          <Button type="submit" size="sm" disabled={adding || !tickerInput.trim()} className="h-8 text-xs">
-            Add
-          </Button>
-        </form>
+      <div className="mb-4 max-w-sm">
+        <TickerSearch
+          placeholder="Search and add ticker..."
+          onSelect={(ticker) => addTicker(ticker)}
+        />
+        {adding && <p className="text-xs text-[#7d8590] mt-1">Adding...</p>}
         {addError && <p className="text-xs text-[#f87171] mt-1">{addError}</p>}
       </div>
 
