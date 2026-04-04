@@ -58,6 +58,7 @@ Create a `.env.local` file in the project root:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 FINNHUB_API_KEY=
+POLYGON_API_KEY=
 ```
 
 See the [Environment Variables](#environment-variables) section below for where to find each value.
@@ -90,8 +91,9 @@ Open [http://localhost:3000](http://localhost:3000). Unauthenticated requests re
 | `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL | Supabase dashboard > Project Settings > API |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key | Supabase dashboard > Project Settings > API |
 | `FINNHUB_API_KEY` | Finnhub REST API key | [finnhub.io/dashboard](https://finnhub.io/dashboard) |
+| `POLYGON_API_KEY` | Polygon.io API key - used for historical price chart data and sparklines. Free tier at polygon.io | [polygon.io/dashboard](https://polygon.io/dashboard/keys) |
 
-`FINNHUB_API_KEY` is server-side only and is never sent to the browser.
+`FINNHUB_API_KEY` and `POLYGON_API_KEY` are server-side only and are never sent to the browser.
 
 ---
 
@@ -170,6 +172,7 @@ Before deploying, add the following to your Vercel project's **Environment Varia
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 FINNHUB_API_KEY
+POLYGON_API_KEY
 ```
 
 Live URL: [batchfolio.batch-apps.com](https://batchfolio.batch-apps.com)

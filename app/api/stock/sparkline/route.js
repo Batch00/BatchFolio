@@ -2,38 +2,63 @@ import { NextResponse } from 'next/server'
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
-  const ticker = searchParams.get('ticker')?.toUpperCase().trim()
+  const ticker = searchParams.get('ticker')
 
   if (!ticker) {
-    return NextResponse.json({ error: 'ticker is required' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'ticker required' },
+      { status: 400 }
+    )
   }
 
-  const apiKey = process.env.FINNHUB_API_KEY
-  if (!apiKey) {
-    return NextResponse.json({ error: 'FINNHUB_API_KEY is not set' }, { status: 500 })
-  }
+  const toDate = new Date()
+  const fromDate = new Date()
+  fromDate.setDate(fromDate.getDate() - 10)
 
-  const now = Math.floor(Date.now() / 1000)
-  const from = now - 7 * 86400
+  const from = fromDate.toISOString().split('T')[0]
+  const to = toDate.toISOString().split('T')[0]
+
+  const url = `https://api.polygon.io/v2/aggs/ticker/${ticker.toUpperCase()}/range/1/day/${from}/${to}?adjusted=true&sort=asc&limit=10&apiKey=${process.env.POLYGON_API_KEY}`
 
   try {
-    const res = await fetch(
-      `https://finnhub.io/api/v1/stock/candle?symbol=${ticker}&resolution=D&from=${from}&to=${now}&token=${apiKey}`,
-      { next: { revalidate: 3600 } },
-    )
+    const res = await fetch(url, {
+      next: { revalidate: 3600 }
+    })
 
     if (!res.ok) {
-      return NextResponse.json({ prices: [] })
+      console.error(
+        'Polygon sparkline error:', res.status,
+        'ticker:', ticker
+      )
+      return NextResponse.json({ prices: [] }, { status: 200 })
     }
 
-    const data = await res.json()
+    const text = await res.text()
 
-    if (data.s === 'no_data' || !data.c) {
-      return NextResponse.json({ prices: [] })
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch {
+      return NextResponse.json({ prices: [] }, { status: 200 })
     }
 
-    return NextResponse.json({ prices: data.c })
-  } catch {
-    return NextResponse.json({ prices: [] })
+    if (
+      !data?.results ||
+      !Array.isArray(data.results) ||
+      data.results.length === 0
+    ) {
+      return NextResponse.json({ prices: [] }, { status: 200 })
+    }
+
+    const prices = data.results.map((bar) => bar.c)
+
+    return NextResponse.json({ prices }, { status: 200 })
+
+  } catch (err) {
+    console.error(
+      'Sparkline route error:', err.message,
+      'ticker:', ticker
+    )
+    return NextResponse.json({ prices: [] }, { status: 200 })
   }
 }
