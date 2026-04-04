@@ -12,6 +12,7 @@ Deno.serve(async () => {
   const supabase = createClient(
     Deno.env.get('APP_SUPABASE_URL')!,
     Deno.env.get('SERVICE_ROLE_KEY')!,
+    { db: { schema: 'batchfolio' } },
   )
 
   // Look up demo user

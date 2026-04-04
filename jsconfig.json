@@ -3,5 +3,6 @@
     "paths": {
       "@/*": ["./*"]
     }
-  }
+  },
+  "exclude": ["supabase/functions"]
 }
