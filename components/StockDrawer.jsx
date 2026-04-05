@@ -30,6 +30,12 @@ function fmtMarketCap(v) {
   return `$${v.toFixed(2)}M`
 }
 
+function fmtNewsDate(isoStr) {
+  if (!isoStr) return ''
+  const d = new Date(isoStr)
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 function StatRow({ label, value, colored }) {
   return (
     <div className="flex items-center justify-between py-2 border-b border-[#21262d] last:border-0">
@@ -47,6 +53,8 @@ export default function StockDrawer({ ticker, onClose }) {
 
   const [quote, setQuote] = useState(null)
   const [fundamentals, setFundamentals] = useState(null)
+  const [news, setNews] = useState([])
+  const [newsLoading, setNewsLoading] = useState(true)
   const [candles, setCandles] = useState([])
   const [range, setRange] = useState('30d')
   const [loading, setLoading] = useState(true)
@@ -57,17 +65,21 @@ export default function StockDrawer({ ticker, onClose }) {
   useEffect(() => {
     if (!symbol) return
     setLoading(true)
+    setNewsLoading(true)
     setError(null)
 
     Promise.all([
       fetch(`/api/stock/quote?ticker=${symbol}`).then((r) => r.json()),
       fetch(`/api/stock/fundamentals?ticker=${symbol}`).then((r) => r.json()),
+      fetch(`/api/stock/news?ticker=${symbol}`).then((r) => r.json()),
       supabase.from('holdings').select('*').eq('ticker', symbol),
     ])
-      .then(([q, f, holdRes]) => {
+      .then(([q, f, n, holdRes]) => {
         if (q.error) throw new Error(q.error)
         setQuote(q)
         setFundamentals(f)
+        setNews(n.news ?? [])
+        setNewsLoading(false)
         const holds = holdRes.data ?? []
         if (holds.length > 0) {
           const totalShares = holds.reduce((s, h) => s + h.shares, 0)
@@ -81,7 +93,10 @@ export default function StockDrawer({ ticker, onClose }) {
           setPosition(null)
         }
       })
-      .catch((err) => setError(err.message))
+      .catch((err) => {
+        setError(err.message)
+        setNewsLoading(false)
+      })
       .finally(() => setLoading(false))
   }, [symbol])
 
@@ -90,10 +105,8 @@ export default function StockDrawer({ ticker, onClose }) {
     setChartLoading(true)
     try {
       const url = `/api/stock/chart?ticker=${symbol}&range=${range}`
-      console.log('Fetching chart:', url)
       const res = await fetch(url)
       const data = await res.json()
-      console.log('Chart API response:', data)
       if (data.error) throw new Error(data.error)
       setCandles(data.candles ?? [])
     } catch {
@@ -122,7 +135,7 @@ export default function StockDrawer({ ticker, onClose }) {
       <div className="stock-drawer">
         {/* Mobile drag handle */}
         <div className="flex justify-center pt-3 pb-1 flex-shrink-0 sm:hidden">
-          <div style={{ width: 40, height: 4, borderRadius: 2, background: '#21262d' }} />
+          <div style={{ width: 32, height: 4, borderRadius: 2, background: '#21262d' }} />
         </div>
 
         {/* Header */}
@@ -144,7 +157,7 @@ export default function StockDrawer({ ticker, onClose }) {
             <button
               onClick={onClose}
               className="text-[#7d8590] hover:text-[#e6edf3] transition-colors ml-4 flex items-center justify-center"
-              style={{ minWidth: 32, minHeight: 32 }}
+              style={{ minWidth: 44, minHeight: 44 }}
             >
               <X className="h-4 w-4" />
             </button>
@@ -229,7 +242,7 @@ export default function StockDrawer({ ticker, onClose }) {
 
           {/* Key stats */}
           {!loading && (
-            <div className="px-5 pt-4 pb-6">
+            <div className="px-5 pt-4">
               <p className="text-[10px] uppercase tracking-[0.08em] text-[#7d8590] mb-[10px]">Key Stats</p>
               <div className="bg-[#0d1117] border border-[#21262d] rounded-md px-3 py-1">
                 <StatRow label="Market Cap" value={fmtMarketCap(fundamentals?.marketCap)} />
@@ -261,6 +274,63 @@ export default function StockDrawer({ ticker, onClose }) {
                   }
                 />
               </div>
+            </div>
+          )}
+
+          {/* News */}
+          {!loading && (
+            <div className="px-5 pt-4 pb-6">
+              <div className="border-t border-[#21262d] my-4" />
+              <p
+                className="font-mono text-[10px] uppercase text-[#7d8590] mb-[10px]"
+                style={{ letterSpacing: '0.08em' }}
+              >
+                News
+              </p>
+
+              {newsLoading ? (
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, i) => (
+                    <Skeleton key={i} className="h-12" />
+                  ))}
+                </div>
+              ) : news.length === 0 ? (
+                <p className="text-xs text-[#7d8590] text-center py-4">
+                  No recent news available
+                </p>
+              ) : (
+                <div>
+                  {news.map((item, i) => (
+                    <a
+                      key={i}
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block py-[10px] transition-colors hover:bg-[rgba(255,255,255,0.02)]"
+                      style={{
+                        borderBottom: i < news.length - 1 ? '1px solid #21262d' : 'none',
+                      }}
+                    >
+                      <p
+                        className="text-xs text-[#e6edf3] leading-snug"
+                        style={{
+                          fontWeight: 500,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {item.headline}
+                      </p>
+                      <p className="text-[10px] mt-1">
+                        <span className="text-[#10b981]">{item.source}</span>
+                        <span className="text-[#7d8590] ml-2">{fmtNewsDate(item.datetime)}</span>
+                      </p>
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -18,12 +18,12 @@ const COLORS = [
 const COLS = [
   { key: 'ticker', label: 'Ticker' },
   { key: 'account', label: 'Account' },
-  { key: 'shares', label: 'Shares', numeric: true },
-  { key: 'avgCost', label: 'Avg Cost', numeric: true },
-  { key: 'livePrice', label: 'Live Price', numeric: true },
-  { key: 'sparkline', label: '7D', numeric: true, noSort: true },
+  { key: 'shares', label: 'Shares', numeric: true, hideMobile: true },
+  { key: 'avgCost', label: 'Avg Cost', numeric: true, hideMobile: true },
+  { key: 'livePrice', label: 'Price', numeric: true },
+  { key: 'sparkline', label: '7D', numeric: true, noSort: true, hideMobile: true },
   { key: 'value', label: 'Value', numeric: true },
-  { key: 'gainLoss', label: 'Gain/Loss $', numeric: true },
+  { key: 'gainLoss', label: 'Gain/Loss $', numeric: true, hideMobile: true },
   { key: 'gainPct', label: 'Gain/Loss %', numeric: true },
 ]
 
@@ -224,7 +224,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                     onClick={col.noSort ? undefined : () => handleSort(col.key)}
                     className={`px-3 py-2.5 text-[10px] uppercase tracking-wider text-[#7d8590] whitespace-nowrap font-mono ${
                       col.noSort ? '' : 'cursor-pointer hover:text-[#e6edf3] select-none'
-                    } ${col.numeric ? 'text-right' : 'text-left'}`}
+                    } ${col.numeric ? 'text-right' : 'text-left'} ${col.hideMobile ? 'hidden md:table-cell' : ''}`}
                   >
                     {col.label}
                     {!col.noSort && <SortIcon dir={sortKey === col.key ? sortDir : null} />}
@@ -237,7 +237,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                 [...Array(5)].map((_, i) => (
                   <tr key={i} className="border-b border-[#21262d]">
                     {COLS.map((col) => (
-                      <td key={col.key} className="px-3 py-2.5">
+                      <td key={col.key} className={`px-3 py-2.5 ${col.hideMobile ? 'hidden md:table-cell' : ''}`}>
                         <Skeleton className="h-4 w-16" />
                       </td>
                     ))}
@@ -264,16 +264,16 @@ export default function PortfolioTab({ onOpenDrawer }) {
                       <td className="px-3 py-2.5 text-[#7d8590] max-w-[140px] truncate">
                         {h.account}
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right">
+                      <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right hidden md:table-cell">
                         {h.shares}
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-[#7d8590] text-right">
+                      <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right hidden md:table-cell">
                         {fmt(h.avgCost)}
                       </td>
                       <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right">
                         {fmt(h.livePrice)}
                       </td>
-                      <td className="px-3 py-2.5 text-right">
+                      <td className="px-3 py-2.5 text-right hidden md:table-cell">
                         {sparklines[h.ticker] ? (
                           <div className="inline-flex justify-end">
                             <Sparkline
@@ -299,7 +299,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                         {fmt(h.value)}
                       </td>
                       <td
-                        className={`px-3 py-2.5 font-mono text-right ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}
+                        className={`px-3 py-2.5 font-mono text-right hidden md:table-cell ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}
                       >
                         {positive ? '+' : ''}
                         {fmt(h.gainLoss)}

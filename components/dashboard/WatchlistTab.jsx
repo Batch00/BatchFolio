@@ -127,26 +127,30 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-[#21262d]">
-                {['Ticker', 'Company Name', 'Price', 'Change $', 'Change %', '52W Range', ''].map(
-                  (h, i) => (
+                {[
+                  { label: 'Ticker', align: 'text-left' },
+                  { label: 'Company Name', align: 'text-left' },
+                  { label: 'Price', align: 'text-right' },
+                  { label: 'Change $', align: 'text-right', hideMobile: true },
+                  { label: 'Change %', align: 'text-right' },
+                  { label: '52W Range', align: 'text-left', hideMobile: true },
+                  { label: '', align: 'text-right' },
+                ].map((h, i) => (
                     <th
                       key={i}
-                      className={`px-3 py-2.5 text-[10px] uppercase tracking-wider text-[#7d8590] whitespace-nowrap font-mono ${
-                        i === 0 || i === 1 || i === 5 ? 'text-left' : i === 6 ? 'text-right' : 'text-right'
-                      }`}
+                      className={`px-3 py-2.5 text-[10px] uppercase tracking-wider text-[#7d8590] whitespace-nowrap font-mono ${h.align} ${h.hideMobile ? 'hidden md:table-cell' : ''}`}
                     >
-                      {h}
+                      {h.label}
                     </th>
-                  ),
-                )}
+                  ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 [...Array(4)].map((_, i) => (
                   <tr key={i} className="border-b border-[#21262d]">
-                    {[...Array(7)].map((_, j) => (
-                      <td key={j} className="px-3 py-2.5">
+                    {[false, false, false, true, false, true, false].map((hide, j) => (
+                      <td key={j} className={`px-3 py-2.5 ${hide ? 'hidden md:table-cell' : ''}`}>
                         <Skeleton className="h-4 w-16" />
                       </td>
                     ))}
@@ -185,7 +189,7 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                         {q ? fmt(q.price) : <Skeleton className="h-4 w-14 ml-auto" />}
                       </td>
                       <td
-                        className={`px-3 py-2.5 font-mono text-right whitespace-nowrap ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}
+                        className={`px-3 py-2.5 font-mono text-right whitespace-nowrap hidden md:table-cell ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}
                       >
                         {q ? `${positive ? '+' : ''}${fmt(q.change)}` : '--'}
                       </td>
@@ -194,7 +198,7 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                       >
                         {q ? fmtPct(q.changePercent) : '--'}
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2.5 hidden md:table-cell">
                         {f && q ? (
                           <RangeBar
                             low={f.low52w}

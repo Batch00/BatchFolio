@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Settings, LayoutDashboard, Briefcase, PieChart, Star, ShieldCheck } from 'lucide-react'
+import { Settings, LayoutDashboard, Briefcase, PieChart, Star, ShieldCheck, Plus } from 'lucide-react'
 import TickerSearch from '@/components/dashboard/TickerSearch'
 
 const TABS = [
@@ -253,12 +253,18 @@ export default function TopBar({
         </div>
       </div>
 
-      {/* Mobile top bar: logo left + + button right */}
+      {/* Mobile top bar: logo left, net worth center, actions right */}
       <div className="md:hidden flex h-12 items-center justify-between px-4">
         <div className="flex items-center">
           <span className="text-[#7d8590] text-[15px] font-medium">Batch</span>
           <span className="text-[#10b981] text-[15px] font-medium">Folio</span>
         </div>
+
+        {netWorth != null && (
+          <span className="font-mono font-semibold text-[#e6edf3] text-sm">
+            {fmtMobile(netWorth)}
+          </span>
+        )}
 
         <div className="flex items-center gap-2">
           {isAdmin && (
@@ -272,14 +278,16 @@ export default function TopBar({
           )}
           <button
             onClick={handleOpen}
-            className="border border-[#10b981]/50 bg-[rgba(16,185,129,0.06)] text-[#10b981] hover:bg-[rgba(16,185,129,0.12)] hover:border-[#10b981] transition-colors rounded px-2.5 py-1 text-[11px] uppercase tracking-wider"
+            className="border border-[#10b981]/50 bg-[rgba(16,185,129,0.06)] text-[#10b981] hover:bg-[rgba(16,185,129,0.12)] hover:border-[#10b981] transition-colors rounded flex items-center justify-center"
+            style={{ minWidth: 32, minHeight: 32 }}
           >
-            + Add
+            <Plus className="h-4 w-4" />
           </button>
           <button
             onClick={() => supabase.auth.signOut().then(() => window.location.reload())}
-            className="text-[#7d8590] hover:text-[#e6edf3] transition-colors"
+            className="text-[#7d8590] hover:text-[#e6edf3] transition-colors flex items-center justify-center"
             title="Sign out"
+            style={{ minWidth: 32, minHeight: 32 }}
           >
             <Settings className="h-4 w-4" />
           </button>

@@ -28,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Trash2, Plus, ChevronDown, ChevronRight } from 'lucide-react'
+import { Trash2, Plus, ChevronDown, ChevronRight, Pencil } from 'lucide-react'
 
 const fmt = (v) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v ?? 0)
@@ -79,6 +79,42 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
 
   // Snapshots
   const [snapshots, setSnapshots] = useState([])
+
+  // Edit account state
+  const [editAccDialog, setEditAccDialog] = useState(false)
+  const [editAccId, setEditAccId] = useState(null)
+  const [editAccName, setEditAccName] = useState('')
+  const [editAccProvider, setEditAccProvider] = useState('')
+  const [editAccType, setEditAccType] = useState('brokerage')
+  const [editAccSaving, setEditAccSaving] = useState(false)
+  const [editAccError, setEditAccError] = useState(null)
+
+  // Edit holding state
+  const [editHoldDialog, setEditHoldDialog] = useState(false)
+  const [editHoldId, setEditHoldId] = useState(null)
+  const [editHoldTicker, setEditHoldTicker] = useState('')
+  const [editHoldShares, setEditHoldShares] = useState('')
+  const [editHoldCost, setEditHoldCost] = useState('')
+  const [editHoldSaving, setEditHoldSaving] = useState(false)
+  const [editHoldError, setEditHoldError] = useState(null)
+
+  // Edit liability state
+  const [editLiabDialog, setEditLiabDialog] = useState(false)
+  const [editLiabId, setEditLiabId] = useState(null)
+  const [editLiabName, setEditLiabName] = useState('')
+  const [editLiabType, setEditLiabType] = useState('loan')
+  const [editLiabBalance, setEditLiabBalance] = useState('')
+  const [editLiabRate, setEditLiabRate] = useState('')
+  const [editLiabSaving, setEditLiabSaving] = useState(false)
+  const [editLiabError, setEditLiabError] = useState(null)
+
+  // Toast state
+  const [toast, setToast] = useState(null)
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 3000)
+  }
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -175,6 +211,39 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     await loadData()
   }
 
+  function openEditAccount(acc) {
+    if (isDemo) { onDemoBlock?.(); return }
+    setEditAccId(acc.id)
+    setEditAccName(acc.name)
+    setEditAccProvider(acc.provider)
+    setEditAccType(acc.type)
+    setEditAccError(null)
+    setEditAccDialog(true)
+  }
+
+  async function saveEditAccount(e) {
+    e.preventDefault()
+    if (isDemo) { onDemoBlock?.(); return }
+    setEditAccSaving(true)
+    setEditAccError(null)
+    const { error: err } = await supabase
+      .from('accounts')
+      .update({
+        name: editAccName.trim(),
+        provider: editAccProvider.trim(),
+        type: editAccType,
+      })
+      .eq('id', editAccId)
+    if (err) {
+      setEditAccError(err.message)
+    } else {
+      setEditAccDialog(false)
+      showToast('Account updated')
+      await loadData()
+    }
+    setEditAccSaving(false)
+  }
+
   // Holding CRUD
   function openAddHolding(accountId) {
     setHoldAccountId(accountId)
@@ -210,6 +279,39 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     if (!confirm('Remove this holding?')) return
     await supabase.from('holdings').delete().eq('id', id)
     await loadData()
+  }
+
+  function openEditHolding(h) {
+    if (isDemo) { onDemoBlock?.(); return }
+    setEditHoldId(h.id)
+    setEditHoldTicker(h.ticker)
+    setEditHoldShares(String(h.shares))
+    setEditHoldCost(String(h.avg_cost_basis))
+    setEditHoldError(null)
+    setEditHoldDialog(true)
+  }
+
+  async function saveEditHolding(e) {
+    e.preventDefault()
+    if (isDemo) { onDemoBlock?.(); return }
+    setEditHoldSaving(true)
+    setEditHoldError(null)
+    const { error: err } = await supabase
+      .from('holdings')
+      .update({
+        shares: parseFloat(editHoldShares),
+        avg_cost_basis: parseFloat(editHoldCost),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', editHoldId)
+    if (err) {
+      setEditHoldError(err.message)
+    } else {
+      setEditHoldDialog(false)
+      showToast('Holding updated')
+      await loadData()
+    }
+    setEditHoldSaving(false)
   }
 
   // Liability CRUD
@@ -248,7 +350,41 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     await loadData()
   }
 
-  // Snapshot delete
+  function openEditLiability(l) {
+    if (isDemo) { onDemoBlock?.(); return }
+    setEditLiabId(l.id)
+    setEditLiabName(l.name)
+    setEditLiabType(l.type)
+    setEditLiabBalance(String(l.balance))
+    setEditLiabRate(l.interest_rate != null ? String(l.interest_rate) : '')
+    setEditLiabError(null)
+    setEditLiabDialog(true)
+  }
+
+  async function saveEditLiability(e) {
+    e.preventDefault()
+    if (isDemo) { onDemoBlock?.(); return }
+    setEditLiabSaving(true)
+    setEditLiabError(null)
+    const { error: err } = await supabase
+      .from('liabilities')
+      .update({
+        name: editLiabName.trim(),
+        type: editLiabType,
+        balance: parseFloat(editLiabBalance),
+        interest_rate: editLiabRate ? parseFloat(editLiabRate) : null,
+      })
+      .eq('id', editLiabId)
+    if (err) {
+      setEditLiabError(err.message)
+    } else {
+      setEditLiabDialog(false)
+      showToast('Liability updated')
+      await loadData()
+    }
+    setEditLiabSaving(false)
+  }
+
   function toggleExpand(id) {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }))
   }
@@ -325,9 +461,20 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
+                          openEditAccount(acc)
+                        }}
+                        className="text-[#7d8590] hover:text-[#10b981] transition-colors"
+                        style={{ minWidth: 28, minHeight: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Pencil className="h-[13px] w-[13px]" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
                           deleteAccount(acc.id)
                         }}
                         className="text-[#7d8590] hover:text-[#f87171] transition-colors"
+                        style={{ minWidth: 28, minHeight: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -350,12 +497,12 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                           No holdings in this account.
                         </p>
                       ) : (
-                        <div className="px-4 pb-3">
+                        <div className="px-4 pb-3 overflow-x-auto">
                           <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto] gap-x-4 gap-y-0 text-[10px] text-[#7d8590] uppercase tracking-wider mb-1">
                             <span>Ticker</span>
                             <span />
-                            <span className="text-right">Shares</span>
-                            <span className="text-right">Avg Cost</span>
+                            <span className="text-right hidden md:block">Shares</span>
+                            <span className="text-right hidden md:block">Avg Cost</span>
                             <span className="text-right">Live Price</span>
                             <span className="text-right">Value</span>
                             <span className="text-right">Gain%</span>
@@ -380,10 +527,10 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                                     {h.ticker}
                                   </button>
                                   <span />
-                                  <span className="font-mono text-xs text-[#7d8590] text-right">
+                                  <span className="font-mono text-xs text-[#e6edf3] text-right hidden md:block">
                                     {h.shares}
                                   </span>
-                                  <span className="font-mono text-xs text-[#7d8590] text-right">
+                                  <span className="font-mono text-xs text-[#e6edf3] text-right hidden md:block">
                                     {fmt(h.avg_cost_basis)}
                                   </span>
                                   <span className="font-mono text-xs text-[#e6edf3] text-right">
@@ -400,8 +547,16 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                                       {gainPct.toFixed(2)}%
                                     </span>
                                     <button
+                                      onClick={() => openEditHolding(h)}
+                                      className="text-[#7d8590] hover:text-[#10b981] transition-colors"
+                                      style={{ minWidth: 28, minHeight: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    >
+                                      <Pencil className="h-[13px] w-[13px]" />
+                                    </button>
+                                    <button
                                       onClick={() => deleteHolding(h.id)}
                                       className="text-[#7d8590] hover:text-[#f87171] transition-colors"
+                                      style={{ minWidth: 28, minHeight: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                     >
                                       <Trash2 className="h-3 w-3" />
                                     </button>
@@ -443,84 +598,96 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
         </div>
 
         <div className="bg-[#161b22] border border-[#21262d] rounded-md overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="text-right">Balance</TableHead>
-                <TableHead className="text-right">Rate</TableHead>
-                <TableHead className="text-right">Monthly Interest</TableHead>
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                [...Array(2)].map((_, i) => (
-                  <TableRow key={i}>
-                    {[...Array(6)].map((_, j) => (
-                      <TableCell key={j}>
-                        <Skeleton className="h-4 w-16" />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : liabilities.length === 0 ? (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center text-[#7d8590] py-8 text-xs"
-                  >
-                    No liabilities added yet.
-                  </TableCell>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead className="text-right">Balance</TableHead>
+                  <TableHead className="text-right">Rate</TableHead>
+                  <TableHead className="text-right hidden md:table-cell">Monthly Interest</TableHead>
+                  <TableHead />
                 </TableRow>
-              ) : (
-                <>
-                  {liabilities.map((l) => {
-                    const monthlyInterest =
-                      l.interest_rate ? (l.balance * l.interest_rate) / 100 / 12 : null
-                    return (
-                      <TableRow key={l.id}>
-                        <TableCell className="text-sm">{l.name}</TableCell>
-                        <TableCell className="text-xs text-[#7d8590] capitalize">
-                          {l.type}
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  [...Array(2)].map((_, i) => (
+                    <TableRow key={i}>
+                      {[...Array(6)].map((_, j) => (
+                        <TableCell key={j}>
+                          <Skeleton className="h-4 w-16" />
                         </TableCell>
-                        <TableCell className="text-right font-mono text-xs text-[#f87171]">
-                          {fmt(l.balance)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-xs text-[#7d8590]">
-                          {l.interest_rate != null ? `${l.interest_rate}%` : '-'}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-xs text-[#f87171]">
-                          {monthlyInterest != null ? fmt(monthlyInterest) : '-'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <button
-                            onClick={() => deleteLiability(l.id)}
-                            className="text-[#7d8590] hover:text-[#f87171] transition-colors"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
+                      ))}
+                    </TableRow>
+                  ))
+                ) : liabilities.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={2}
-                      className="text-xs font-semibold text-[#7d8590] uppercase tracking-wider"
+                      colSpan={6}
+                      className="text-center text-[#7d8590] py-8 text-xs"
                     >
-                      Total
+                      No liabilities added yet.
                     </TableCell>
-                    <TableCell className="text-right font-mono text-sm font-semibold text-[#f87171]">
-                      {fmt(liabTotal)}
-                    </TableCell>
-                    <TableCell colSpan={3} />
                   </TableRow>
-                </>
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  <>
+                    {liabilities.map((l) => {
+                      const monthlyInterest =
+                        l.interest_rate ? (l.balance * l.interest_rate) / 100 / 12 : null
+                      return (
+                        <TableRow key={l.id}>
+                          <TableCell className="text-sm">{l.name}</TableCell>
+                          <TableCell className="text-xs text-[#7d8590] capitalize">
+                            {l.type}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs text-[#f87171]">
+                            {fmt(l.balance)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs text-[#7d8590]">
+                            {l.interest_rate != null ? `${l.interest_rate}%` : '-'}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs text-[#f87171] hidden md:table-cell">
+                            {monthlyInterest != null ? fmt(monthlyInterest) : '-'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => openEditLiability(l)}
+                                className="text-[#7d8590] hover:text-[#10b981] transition-colors"
+                                style={{ minWidth: 28, minHeight: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              >
+                                <Pencil className="h-[13px] w-[13px]" />
+                              </button>
+                              <button
+                                onClick={() => deleteLiability(l.id)}
+                                className="text-[#7d8590] hover:text-[#f87171] transition-colors"
+                                style={{ minWidth: 28, minHeight: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                    <TableRow>
+                      <TableCell
+                        colSpan={2}
+                        className="text-xs font-semibold text-[#7d8590] uppercase tracking-wider"
+                      >
+                        Total
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm font-semibold text-[#f87171]">
+                        {fmt(liabTotal)}
+                      </TableCell>
+                      <TableCell colSpan={3} />
+                    </TableRow>
+                  </>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </div>
 
@@ -537,55 +704,57 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
         </p>
 
         <div className="bg-[#161b22] border border-[#21262d] rounded-md overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead className="text-right">Total Assets</TableHead>
-                <TableHead className="text-right">Total Liabilities</TableHead>
-                <TableHead className="text-right">Net Worth</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                [...Array(3)].map((_, i) => (
-                  <TableRow key={i}>
-                    {[...Array(4)].map((_, j) => (
-                      <TableCell key={j}>
-                        <Skeleton className="h-4 w-20" />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : snapshots.length === 0 ? (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell
-                    colSpan={4}
-                    className="text-center text-[#7d8590] py-8 text-xs"
-                  >
-                    No history yet. Your first snapshot will be recorded tonight at midnight.
-                  </TableCell>
+                  <TableHead>Date</TableHead>
+                  <TableHead className="text-right">Total Assets</TableHead>
+                  <TableHead className="text-right">Total Liabilities</TableHead>
+                  <TableHead className="text-right">Net Worth</TableHead>
                 </TableRow>
-              ) : (
-                snapshots.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-mono text-xs text-[#7d8590]">
-                      {fmtDate(s.date)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-xs text-[#e6edf3]">
-                      {fmt(s.total_assets)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-xs text-[#f87171]">
-                      {fmt(s.total_liabilities)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-xs text-[#e6edf3]">
-                      {fmt(s.net_worth)}
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  [...Array(3)].map((_, i) => (
+                    <TableRow key={i}>
+                      {[...Array(4)].map((_, j) => (
+                        <TableCell key={j}>
+                          <Skeleton className="h-4 w-20" />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : snapshots.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={4}
+                      className="text-center text-[#7d8590] py-8 text-xs"
+                    >
+                      No history yet. Your first snapshot will be recorded tonight at midnight.
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  snapshots.map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell className="font-mono text-xs text-[#7d8590]">
+                        {fmtDate(s.date)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs text-[#e6edf3]">
+                        {fmt(s.total_assets)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs text-[#f87171]">
+                        {fmt(s.total_liabilities)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs text-[#e6edf3]">
+                        {fmt(s.net_worth)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </div>
 
@@ -630,6 +799,59 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
             <Button type="submit" className="w-full" disabled={accSaving}>
               {accSaving ? 'Adding...' : 'Add Account'}
             </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ---- EDIT ACCOUNT DIALOG ---- */}
+      <Dialog open={editAccDialog} onOpenChange={setEditAccDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Account</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={saveEditAccount} className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>Account Name</Label>
+              <Input
+                value={editAccName}
+                onChange={(e) => setEditAccName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Provider</Label>
+              <Input
+                value={editAccProvider}
+                onChange={(e) => setEditAccProvider(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Type</Label>
+              <Select value={editAccType} onValueChange={setEditAccType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="brokerage">Brokerage</SelectItem>
+                  <SelectItem value="retirement">Retirement</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {editAccError && <p className="text-sm text-[#f87171]">{editAccError}</p>}
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="flex-1"
+                onClick={() => setEditAccDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" className="flex-1" disabled={editAccSaving}>
+                {editAccSaving ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
           </form>
         </DialogContent>
       </Dialog>
@@ -685,6 +907,59 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
         </DialogContent>
       </Dialog>
 
+      {/* ---- EDIT HOLDING DIALOG ---- */}
+      <Dialog open={editHoldDialog} onOpenChange={setEditHoldDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Holding</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={saveEditHolding} className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>Ticker</Label>
+              <p className="font-mono text-sm text-[#10b981]">{editHoldTicker}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Shares</Label>
+              <Input
+                type="number"
+                step="0.0001"
+                min="0"
+                value={editHoldShares}
+                onChange={(e) => setEditHoldShares(e.target.value)}
+                className="font-mono"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Avg Cost Basis (per share)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={editHoldCost}
+                onChange={(e) => setEditHoldCost(e.target.value)}
+                className="font-mono"
+                required
+              />
+            </div>
+            {editHoldError && <p className="text-sm text-[#f87171]">{editHoldError}</p>}
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="flex-1"
+                onClick={() => setEditHoldDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" className="flex-1" disabled={editHoldSaving}>
+                {editHoldSaving ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* ---- ADD LIABILITY DIALOG ---- */}
       <Dialog open={liabDialog} onOpenChange={setLiabDialog}>
         <DialogContent>
@@ -729,7 +1004,7 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Interest Rate (%) — optional</Label>
+              <Label>Interest Rate (%) - optional</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -748,6 +1023,87 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* ---- EDIT LIABILITY DIALOG ---- */}
+      <Dialog open={editLiabDialog} onOpenChange={setEditLiabDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Liability</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={saveEditLiability} className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input
+                value={editLiabName}
+                onChange={(e) => setEditLiabName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Type</Label>
+              <Select value={editLiabType} onValueChange={setEditLiabType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="loan">Loan</SelectItem>
+                  <SelectItem value="mortgage">Mortgage</SelectItem>
+                  <SelectItem value="credit card">Credit Card</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Balance</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={editLiabBalance}
+                onChange={(e) => setEditLiabBalance(e.target.value)}
+                className="font-mono"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Interest Rate (%) - optional</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={editLiabRate}
+                onChange={(e) => setEditLiabRate(e.target.value)}
+                className="font-mono"
+              />
+            </div>
+            {editLiabError && <p className="text-sm text-[#f87171]">{editLiabError}</p>}
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="flex-1"
+                onClick={() => setEditLiabDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" className="flex-1" disabled={editLiabSaving}>
+                {editLiabSaving ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Success toast */}
+      {toast && (
+        <div
+          className="fixed bottom-20 md:bottom-6 right-4 z-50 px-4 py-3 rounded-md border shadow-lg"
+          style={{ background: '#161b22', borderColor: '#10b981' }}
+        >
+          <p className="text-sm text-[#34d399]">{toast}</p>
+        </div>
+      )}
     </div>
   )
 }

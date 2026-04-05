@@ -167,7 +167,7 @@ export default function App() {
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto min-h-0 pb-20 md:pb-0">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 pb-20 md:pb-0">
         {activeTab === 'overview' && (
           <OverviewTab
             onOpenDrawer={setDrawerStock}
