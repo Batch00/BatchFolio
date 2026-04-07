@@ -154,7 +154,7 @@ export default function App() {
           <span style={{ color: '#fbbf24', fontSize: 12 }}>
             You are in demo mode - data resets nightly.{' '}
             <a
-              href="https://batch-apps.com"
+              href="https://www.batch-apps.com"
               target="_blank"
               rel="noopener noreferrer"
               className="underline underline-offset-2 hover:opacity-80 transition-opacity"
@@ -199,7 +199,7 @@ export default function App() {
         style={{
           background: '#0d1117',
           borderColor: '#21262d',
-          height: 56,
+          paddingBottom: 'env(safe-area-inset-bottom)',
         }}
       >
         {TABS.map(({ id, label, icon: Icon }) => {
@@ -208,16 +208,22 @@ export default function App() {
             <button
               key={id}
               onClick={() => setActiveTab(id)}
-              className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
-              style={{ color: active ? '#10b981' : '#7d8590' }}
+              className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors relative"
+              style={{ color: active ? '#10b981' : '#7d8590', minHeight: 56 }}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className="h-5 w-5" />
               <span
                 className="uppercase tracking-wider"
                 style={{ fontSize: 9, fontWeight: 500 }}
               >
                 {label}
               </span>
+              {active && (
+                <span
+                  className="absolute bottom-0 left-1/2 -translate-x-1/2"
+                  style={{ width: 20, height: 2, background: '#10b981', borderRadius: 1 }}
+                />
+              )}
             </button>
           )
         })}
@@ -235,7 +241,7 @@ export default function App() {
           <p className="text-sm text-[#e6edf3]">
             This is a demo account.{' '}
             <a
-              href="https://batch-apps.com"
+              href="https://www.batch-apps.com"
               target="_blank"
               rel="noopener noreferrer"
               className="text-[#10b981] hover:text-[#34d399] transition-colors"

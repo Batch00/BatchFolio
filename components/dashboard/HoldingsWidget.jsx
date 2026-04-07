@@ -104,26 +104,24 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
                   {fmt(h.avg_cost_basis)}
                 </span>
                 <span className="font-mono text-xs text-[#e6edf3] w-[80px] text-right flex-shrink-0 hidden md:block">
-                  {fmt(h.livePrice)}
+                  {h.hasPrice === false ? '--' : fmt(h.livePrice)}
                 </span>
                 <span className="font-mono text-xs text-[#e6edf3] w-[80px] text-right flex-shrink-0 font-semibold">
-                  {fmt(h.value)}
+                  {h.hasPrice === false ? '--' : fmt(h.value)}
                 </span>
                 <span
                   className={`font-mono text-xs w-[80px] text-right flex-shrink-0 hidden md:block ${
                     h.positive ? 'text-[#34d399]' : 'text-[#f87171]'
                   }`}
                 >
-                  {h.positive ? '+' : ''}
-                  {fmt(h.gainLoss)}
+                  {h.gainLoss == null ? '--' : `${h.positive ? '+' : ''}${fmt(h.gainLoss)}`}
                 </span>
                 <span
                   className={`font-mono text-xs w-[70px] text-right flex-shrink-0 font-semibold ${
                     h.positive ? 'text-[#34d399]' : 'text-[#f87171]'
                   }`}
                 >
-                  {h.positive ? '+' : ''}
-                  {h.gainPct.toFixed(2)}%
+                  {h.gainPct == null ? 'N/A' : `${h.positive ? '+' : ''}${h.gainPct.toFixed(2)}%`}
                 </span>
               </button>
             ))}

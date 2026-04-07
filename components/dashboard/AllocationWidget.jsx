@@ -4,12 +4,14 @@ import { PieChart, Pie, Cell, Tooltip, Label, ResponsiveContainer } from 'rechar
 import { Skeleton } from '@/components/ui/skeleton'
 
 const SLICE_COLORS = [
-  '#10b981',
-  '#3b82f6',
-  '#f59e0b',
-  '#8b5cf6',
-  '#ef4444',
-  '#06b6d4',
+  '#10b981', // emerald
+  '#3b82f6', // blue
+  '#f59e0b', // amber
+  '#8b5cf6', // violet
+  '#ef4444', // red
+  '#06b6d4', // cyan
+  '#f97316', // orange
+  '#84cc16', // lime
 ]
 
 function fmtCompact(v) {
@@ -46,17 +48,17 @@ export default function AllocationWidget({ loading, holdings }) {
           No holdings yet.
         </div>
       ) : (
-        <div className="flex items-center gap-6">
+        <div className="flex flex-col items-center">
           {/* Donut chart */}
-          <div className="flex-shrink-0" style={{ width: 120, height: 120 }}>
+          <div className="flex-shrink-0" style={{ width: 140, height: 140 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={data}
                   cx="50%"
                   cy="50%"
-                  innerRadius={32}
-                  outerRadius={54}
+                  innerRadius={36}
+                  outerRadius={62}
                   paddingAngle={2}
                   dataKey="value"
                   strokeWidth={0}
@@ -99,12 +101,12 @@ export default function AllocationWidget({ loading, holdings }) {
             </ResponsiveContainer>
           </div>
 
-          {/* Legend pills */}
-          <div className="flex flex-wrap gap-2 flex-1">
+          {/* Legend list - vertical */}
+          <div className="flex flex-col gap-1.5 w-full mt-3">
             {data.map((d, i) => (
               <div
                 key={d.ticker}
-                className="flex items-center gap-1.5 bg-[#0d1117] rounded px-2.5 py-1.5"
+                className="flex items-center gap-2 px-1"
               >
                 <span
                   style={{
@@ -115,9 +117,9 @@ export default function AllocationWidget({ loading, holdings }) {
                     background: SLICE_COLORS[i % SLICE_COLORS.length],
                   }}
                 />
-                <span className="font-mono text-[11px] text-[#7d8590]">{d.ticker}</span>
-                <span className="font-mono text-[11px] text-[#e6edf3]">{d.pct.toFixed(1)}%</span>
-                <span className="font-mono text-[10px] text-[#7d8590]">{fmt(d.value)}</span>
+                <span className="font-mono text-[11px] text-[#10b981] w-10">{d.ticker}</span>
+                <span className="font-mono text-[11px] text-[#e6edf3] flex-1 text-right">{d.pct.toFixed(1)}%</span>
+                <span className="font-mono text-[10px] text-[#7d8590] w-14 text-right">{fmt(d.value)}</span>
               </div>
             ))}
           </div>

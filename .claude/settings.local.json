@@ -10,7 +10,8 @@
       "Bash(echo Done:*)",
       "Bash(cd \"C:\\\\Users\\\\carso\\\\Batch Apps\\\\BatchFolio\" && npm run build 2>&1)",
       "Bash(npm run:*)",
-      "Bash(npx supabase:*)"
+      "Bash(npx supabase:*)",
+      "Bash(node -e \":*)"
     ]
   }
 }

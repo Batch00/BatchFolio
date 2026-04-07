@@ -39,7 +39,7 @@ export default function NetWorthWidget({
   return (
     <div className="bg-[#161b22] border border-[#10b981]/40 rounded-md p-4 h-full flex flex-col">
       <p
-        className="text-[11px] uppercase text-[#7d8590] font-mono mb-3"
+        className="text-[10px] uppercase text-[#7d8590] font-mono mb-3"
         style={{ letterSpacing: '0.08em' }}
       >
         Net Worth

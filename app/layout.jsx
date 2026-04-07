@@ -3,9 +3,27 @@ import './globals.css'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#10b981',
+}
+
 export const metadata = {
   title: 'BatchFolio',
-  description: 'Investment portfolio tracker - part of the Batch Apps umbrella',
+  description: 'Investment portfolio tracker by Batch Apps',
+  manifest: '/manifest.json',
+  themeColor: '#10b981',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'BatchFolio',
+  },
+  icons: {
+    icon: '/favicon.svg',
+    apple: '/icon-192.png',
+  },
 }
 
 export default function RootLayout({ children }) {

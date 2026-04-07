@@ -135,7 +135,7 @@ export default function StockDrawer({ ticker, onClose }) {
       <div className="stock-drawer">
         {/* Mobile drag handle */}
         <div className="flex justify-center pt-3 pb-1 flex-shrink-0 sm:hidden">
-          <div style={{ width: 32, height: 4, borderRadius: 2, background: '#21262d' }} />
+          <div style={{ width: 32, height: 4, borderRadius: 2, background: '#3d4451' }} />
         </div>
 
         {/* Header */}

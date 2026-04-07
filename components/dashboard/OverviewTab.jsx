@@ -189,19 +189,21 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
 
   const enrichedHoldings = holdings
     .map((h) => {
-      const livePrice = prices[h.ticker]?.price ?? 0
-      const value = h.shares * livePrice
+      const hasPrice = prices[h.ticker]?.price != null && prices[h.ticker].price > 0
+      const livePrice = hasPrice ? prices[h.ticker].price : null
+      const value = hasPrice ? h.shares * livePrice : null
       const costBasis = h.shares * h.avg_cost_basis
-      const gainLoss = value - costBasis
-      const gainPct = costBasis > 0 ? (gainLoss / costBasis) * 100 : 0
+      const gainLoss = value != null ? value - costBasis : null
+      const gainPct = value != null && costBasis > 0 ? (gainLoss / costBasis) * 100 : null
       return {
         ...h,
         livePrice,
-        value,
+        value: value ?? 0,
         costBasis,
         gainLoss,
         gainPct,
-        positive: gainLoss >= 0,
+        positive: gainLoss != null ? gainLoss >= 0 : true,
+        hasPrice,
         name: prices[h.ticker]?.name ?? '',
       }
     })
@@ -237,32 +239,30 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
         <TrendChart loading={loading} snapshots={snapshots} range={range} />
       </div>
 
-      {/* Row 2: Full width holdings */}
-      <HoldingsWidget
-        loading={loading}
-        holdings={enrichedHoldings}
-        sparklines={sparklines}
-        onOpenDrawer={onOpenDrawer}
-      />
-
-      {/* Row 3: Movers + Watchlist */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Row 2: Holdings (1.8fr) | Allocation (1fr) | Top Movers (1fr) */}
+      <div className="grid grid-cols-1 md:grid-cols-[1.8fr_1fr_1fr] gap-4 items-start">
+        <HoldingsWidget
+          loading={loading}
+          holdings={enrichedHoldings}
+          sparklines={sparklines}
+          onOpenDrawer={onOpenDrawer}
+        />
+        <AllocationWidget loading={loading} holdings={enrichedHoldings} />
         <MoversWidget
           loading={loading}
           holdings={enrichedHoldings}
           prices={prices}
           onOpenDrawer={onOpenDrawer}
         />
-        <WatchlistWidget
-          loading={loading}
-          watchlist={enrichedWatchlist.slice(0, 5)}
-          fundamentals={wlFundamentals}
-          onOpenDrawer={onOpenDrawer}
-        />
       </div>
 
-      {/* Row 4: Full width allocation */}
-      <AllocationWidget loading={loading} holdings={enrichedHoldings} />
+      {/* Row 3: Full width watchlist */}
+      <WatchlistWidget
+        loading={loading}
+        watchlist={enrichedWatchlist.slice(0, 8)}
+        fundamentals={wlFundamentals}
+        onOpenDrawer={onOpenDrawer}
+      />
     </div>
   )
 }

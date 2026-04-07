@@ -11,8 +11,14 @@ const fmt = (v) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v ?? 0)
 
 const COLORS = [
-  '#10b981', '#059669', '#34d399', '#047857',
-  '#6ee7b7', '#065f46', '#a7f3d0', '#064e3b',
+  '#10b981', // emerald
+  '#3b82f6', // blue
+  '#f59e0b', // amber
+  '#8b5cf6', // violet
+  '#ef4444', // red
+  '#06b6d4', // cyan
+  '#f97316', // orange
+  '#84cc16', // lime
 ]
 
 const COLS = [
@@ -74,17 +80,19 @@ export default function PortfolioTab({ onOpenDrawer }) {
     })
 
     const enriched = (allHoldings ?? []).map((h) => {
-      const livePrice = priceMap[h.ticker]?.price ?? 0
-      const value = h.shares * livePrice
+      const hasPrice = priceMap[h.ticker]?.price != null && priceMap[h.ticker].price > 0
+      const livePrice = hasPrice ? priceMap[h.ticker].price : null
+      const value = hasPrice ? h.shares * livePrice : null
       const costBasis = h.shares * h.avg_cost_basis
-      const gainLoss = value - costBasis
-      const gainPct = costBasis > 0 ? (gainLoss / costBasis) * 100 : 0
+      const gainLoss = value != null ? value - costBasis : null
+      const gainPct = value != null && costBasis > 0 ? (gainLoss / costBasis) * 100 : null
       return {
         ...h,
         account: h.accounts?.name ?? '--',
         avgCost: h.avg_cost_basis,
         livePrice,
-        value,
+        hasPrice,
+        value: value ?? 0,
         gainLoss,
         gainPct,
       }
@@ -149,7 +157,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
     <div className="p-4 space-y-4">
       {/* Header */}
       <div className="flex items-baseline gap-3">
-        <p className="text-xs text-[#7d8590] uppercase tracking-wider">Total Portfolio</p>
+        <p className="text-[10px] text-[#7d8590] uppercase font-mono" style={{ letterSpacing: '0.08em' }}>Total Portfolio</p>
         {loading ? (
           <Skeleton className="h-8 w-36 inline-block" />
         ) : (
@@ -250,8 +258,9 @@ export default function PortfolioTab({ onOpenDrawer }) {
                   </td>
                 </tr>
               ) : (
-                sorted.map((h) => {
-                  const positive = h.gainLoss >= 0
+                <>
+                {sorted.map((h) => {
+                  const positive = h.gainLoss != null ? h.gainLoss >= 0 : true
                   return (
                     <tr
                       key={h.id}
@@ -271,14 +280,14 @@ export default function PortfolioTab({ onOpenDrawer }) {
                         {fmt(h.avgCost)}
                       </td>
                       <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right">
-                        {fmt(h.livePrice)}
+                        {h.hasPrice ? fmt(h.livePrice) : '--'}
                       </td>
                       <td className="px-3 py-2.5 text-right hidden md:table-cell">
                         {sparklines[h.ticker] ? (
                           <div className="inline-flex justify-end">
                             <Sparkline
                               prices={sparklines[h.ticker]}
-                              positive={h.gainLoss >= 0}
+                              positive={positive}
                               width={60}
                               height={28}
                             />
@@ -296,23 +305,42 @@ export default function PortfolioTab({ onOpenDrawer }) {
                         )}
                       </td>
                       <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right">
-                        {fmt(h.value)}
+                        {h.hasPrice ? fmt(h.value) : '--'}
                       </td>
                       <td
                         className={`px-3 py-2.5 font-mono text-right hidden md:table-cell ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}
                       >
-                        {positive ? '+' : ''}
-                        {fmt(h.gainLoss)}
+                        {h.gainLoss == null ? '--' : `${positive ? '+' : ''}${fmt(h.gainLoss)}`}
                       </td>
                       <td
                         className={`px-3 py-2.5 font-mono text-right ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}
                       >
-                        {positive ? '+' : ''}
-                        {h.gainPct.toFixed(2)}%
+                        {h.gainPct == null ? 'N/A' : `${positive ? '+' : ''}${h.gainPct.toFixed(2)}%`}
                       </td>
                     </tr>
                   )
-                })
+                })}
+                {/* Total row */}
+                {sorted.length > 0 && (() => {
+                  const totalGainLoss = sorted.reduce((s, r) => s + (r.gainLoss ?? 0), 0)
+                  const totalPositive = totalGainLoss >= 0
+                  return (
+                    <tr className="border-t-2 border-[#21262d] bg-[#0d1117]">
+                      <td className="px-3 py-2.5 font-mono text-xs font-semibold text-[#7d8590] uppercase tracking-wider">TOTAL</td>
+                      <td className="px-3 py-2.5" />
+                      <td className="px-3 py-2.5 hidden md:table-cell" />
+                      <td className="px-3 py-2.5 hidden md:table-cell" />
+                      <td className="px-3 py-2.5" />
+                      <td className="px-3 py-2.5 hidden md:table-cell" />
+                      <td className="px-3 py-2.5 font-mono text-sm font-semibold text-[#e6edf3] text-right">{fmt(totalValue)}</td>
+                      <td className={`px-3 py-2.5 font-mono text-sm font-semibold text-right hidden md:table-cell ${totalPositive ? 'text-[#34d399]' : 'text-[#f87171]'}`}>
+                        {totalPositive ? '+' : ''}{fmt(totalGainLoss)}
+                      </td>
+                      <td className="px-3 py-2.5" />
+                    </tr>
+                  )
+                })()}
+                </>
               )}
             </tbody>
           </table>

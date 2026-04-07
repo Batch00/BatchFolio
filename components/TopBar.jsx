@@ -167,9 +167,17 @@ export default function TopBar({
       <div className="hidden md:grid h-12 grid-cols-[1fr_auto_1fr] items-center px-4">
         {/* Left: Logo + Tabs */}
         <div className="flex items-center min-w-0">
-          <div className="flex items-center mr-4 flex-shrink-0">
-            <span className="text-[#7d8590] text-[15px] font-medium">Batch</span>
-            <span className="text-[#10b981] text-[15px] font-medium">Folio</span>
+          <div className="flex items-center gap-2 mr-4 flex-shrink-0">
+            <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+              <rect width="32" height="32" rx="6" fill="#161b22"/>
+              <rect x="4" y="4" width="24" height="24" rx="4" fill="#0d1117" stroke="#10b981" strokeWidth="1.5"/>
+              <polyline points="8,22 13,16 18,18 24,10" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="24" cy="10" r="2" fill="#10b981"/>
+            </svg>
+            <div className="flex items-center">
+              <span className="text-[#7d8590] text-[15px] font-medium">Batch</span>
+              <span className="text-[#10b981] text-[15px] font-medium">Folio</span>
+            </div>
           </div>
 
           <div className="flex items-center flex-shrink-0">
@@ -255,9 +263,17 @@ export default function TopBar({
 
       {/* Mobile top bar: logo left, net worth center, actions right */}
       <div className="md:hidden flex h-12 items-center justify-between px-4">
-        <div className="flex items-center">
-          <span className="text-[#7d8590] text-[15px] font-medium">Batch</span>
-          <span className="text-[#10b981] text-[15px] font-medium">Folio</span>
+        <div className="flex items-center gap-1.5">
+          <svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+            <rect width="32" height="32" rx="6" fill="#161b22"/>
+            <rect x="4" y="4" width="24" height="24" rx="4" fill="#0d1117" stroke="#10b981" strokeWidth="1.5"/>
+            <polyline points="8,22 13,16 18,18 24,10" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <circle cx="24" cy="10" r="2" fill="#10b981"/>
+          </svg>
+          <div className="flex items-center">
+            <span className="text-[#7d8590] text-sm font-medium">Batch</span>
+            <span className="text-[#10b981] text-sm font-medium">Folio</span>
+          </div>
         </div>
 
         {netWorth != null && (
@@ -279,7 +295,7 @@ export default function TopBar({
           <button
             onClick={handleOpen}
             className="border border-[#10b981]/50 bg-[rgba(16,185,129,0.06)] text-[#10b981] hover:bg-[rgba(16,185,129,0.12)] hover:border-[#10b981] transition-colors rounded flex items-center justify-center"
-            style={{ minWidth: 32, minHeight: 32 }}
+            style={{ minWidth: 44, minHeight: 44 }}
           >
             <Plus className="h-4 w-4" />
           </button>

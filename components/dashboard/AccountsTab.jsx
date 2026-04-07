@@ -397,7 +397,7 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
       <div>
         <div className="flex items-center justify-between mb-3">
           <p
-            className="text-[10px] uppercase text-[#7d8590]"
+            className="text-[10px] uppercase text-[#7d8590] font-mono"
             style={{ letterSpacing: '0.08em' }}
           >
             Accounts
@@ -464,7 +464,7 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                           openEditAccount(acc)
                         }}
                         className="text-[#7d8590] hover:text-[#10b981] transition-colors"
-                        style={{ minWidth: 28, minHeight: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       >
                         <Pencil className="h-[13px] w-[13px]" />
                       </button>
@@ -474,7 +474,7 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                           deleteAccount(acc.id)
                         }}
                         className="text-[#7d8590] hover:text-[#f87171] transition-colors"
-                        style={{ minWidth: 28, minHeight: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -549,14 +549,14 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                                     <button
                                       onClick={() => openEditHolding(h)}
                                       className="text-[#7d8590] hover:text-[#10b981] transition-colors"
-                                      style={{ minWidth: 28, minHeight: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                      style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                     >
                                       <Pencil className="h-[13px] w-[13px]" />
                                     </button>
                                     <button
                                       onClick={() => deleteHolding(h.id)}
                                       className="text-[#7d8590] hover:text-[#f87171] transition-colors"
-                                      style={{ minWidth: 28, minHeight: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                      style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                     >
                                       <Trash2 className="h-3 w-3" />
                                     </button>
@@ -580,7 +580,7 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
       <div>
         <div className="flex items-center justify-between mb-3">
           <p
-            className="text-[10px] uppercase text-[#7d8590]"
+            className="text-[10px] uppercase text-[#7d8590] font-mono"
             style={{ letterSpacing: '0.08em' }}
           >
             Liabilities
@@ -655,14 +655,14 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                               <button
                                 onClick={() => openEditLiability(l)}
                                 className="text-[#7d8590] hover:text-[#10b981] transition-colors"
-                                style={{ minWidth: 28, minHeight: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                               >
                                 <Pencil className="h-[13px] w-[13px]" />
                               </button>
                               <button
                                 onClick={() => deleteLiability(l.id)}
                                 className="text-[#7d8590] hover:text-[#f87171] transition-colors"
-                                style={{ minWidth: 28, minHeight: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -694,7 +694,7 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
       {/* ---- SNAPSHOT HISTORY SECTION ---- */}
       <div>
         <p
-          className="text-[10px] uppercase text-[#7d8590] mb-2"
+          className="text-[10px] uppercase text-[#7d8590] font-mono mb-2"
           style={{ letterSpacing: '0.08em' }}
         >
           Snapshot History

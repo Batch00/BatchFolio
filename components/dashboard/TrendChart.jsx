@@ -52,7 +52,7 @@ export default function TrendChart({ loading, snapshots, range }) {
   return (
     <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4 h-full flex flex-col">
       <p
-        className="text-[10px] uppercase text-[#7d8590] font-mono mb-3"
+        className="text-[10px] uppercase text-[#7d8590] font-mono mb-[10px]"
         style={{ letterSpacing: '0.08em' }}
       >
         Net Worth Trend
