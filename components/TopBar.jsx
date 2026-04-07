@@ -160,7 +160,7 @@ export default function TopBar({
 
   return (
     <div
-      className="flex-shrink-0 sticky top-0 z-30 border-b"
+      className="flex-shrink-0 sticky top-0 z-30 border-b w-full overflow-hidden"
       style={{ borderColor: '#21262d', background: '#0d1117' }}
     >
       {/* Desktop top bar */}
@@ -261,33 +261,35 @@ export default function TopBar({
         </div>
       </div>
 
-      {/* Mobile top bar: logo left, net worth center, actions right */}
-      <div className="md:hidden flex h-12 items-center justify-between px-4">
-        <div className="flex items-center gap-1.5">
+      {/* Mobile top bar: 3-column grid so center is always truly centered */}
+      <div className="md:hidden grid h-12 items-center overflow-hidden w-full" style={{ gridTemplateColumns: '1fr auto 1fr' }}>
+        {/* Left: logo mark only (no text) */}
+        <div className="flex items-center pl-4 min-w-0">
           <svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
             <rect width="32" height="32" rx="6" fill="#161b22"/>
             <rect x="4" y="4" width="24" height="24" rx="4" fill="#0d1117" stroke="#10b981" strokeWidth="1.5"/>
             <polyline points="8,22 13,16 18,18 24,10" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
             <circle cx="24" cy="10" r="2" fill="#10b981"/>
           </svg>
-          <div className="flex items-center">
-            <span className="text-[#7d8590] text-sm font-medium">Batch</span>
-            <span className="text-[#10b981] text-sm font-medium">Folio</span>
-          </div>
         </div>
 
-        {netWorth != null && (
-          <span className="font-mono font-semibold text-[#e6edf3] text-sm">
-            {fmtMobile(netWorth)}
+        {/* Center: net worth, always truly centered */}
+        <div className="flex items-center justify-center">
+          <span className="font-mono font-semibold text-[#e6edf3]" style={{ fontSize: 14 }}>
+            {netWorth != null
+              ? `$${Math.round(netWorth).toLocaleString('en-US')}`
+              : '--'}
           </span>
-        )}
+        </div>
 
-        <div className="flex items-center gap-2">
+        {/* Right: + add button + settings */}
+        <div className="flex items-center justify-end gap-1 pr-3 flex-shrink-0">
           {isAdmin && (
             <Link
               href="/admin"
-              className="text-[#7d8590] hover:text-[#e6edf3] transition-colors"
+              className="text-[#7d8590] hover:text-[#e6edf3] transition-colors flex items-center justify-center"
               title="Admin"
+              style={{ minWidth: 36, minHeight: 44 }}
             >
               <ShieldCheck className="h-4 w-4" />
             </Link>
@@ -303,7 +305,7 @@ export default function TopBar({
             onClick={() => supabase.auth.signOut().then(() => window.location.reload())}
             className="text-[#7d8590] hover:text-[#e6edf3] transition-colors flex items-center justify-center"
             title="Sign out"
-            style={{ minWidth: 32, minHeight: 32 }}
+            style={{ minWidth: 44, minHeight: 44 }}
           >
             <Settings className="h-4 w-4" />
           </button>
