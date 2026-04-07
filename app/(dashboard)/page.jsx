@@ -200,6 +200,7 @@ export default function App() {
           background: '#0d1117',
           borderColor: '#21262d',
           paddingBottom: 'env(safe-area-inset-bottom)',
+          minHeight: 'calc(56px + env(safe-area-inset-bottom))',
         }}
       >
         {TABS.map(({ id, label, icon: Icon }) => {

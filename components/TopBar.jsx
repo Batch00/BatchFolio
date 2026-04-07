@@ -161,7 +161,11 @@ export default function TopBar({
   return (
     <div
       className="flex-shrink-0 sticky top-0 z-30 border-b w-full overflow-hidden"
-      style={{ borderColor: '#21262d', background: '#0d1117' }}
+      style={{
+        borderColor: '#21262d',
+        background: '#0d1117',
+        paddingTop: 'env(safe-area-inset-top)',
+      }}
     >
       {/* Desktop top bar */}
       <div className="hidden md:grid h-12 grid-cols-[1fr_auto_1fr] items-center px-4">
@@ -262,7 +266,7 @@ export default function TopBar({
       </div>
 
       {/* Mobile top bar: 3-column grid so center is always truly centered */}
-      <div className="md:hidden grid h-12 items-center overflow-hidden w-full" style={{ gridTemplateColumns: '1fr auto 1fr' }}>
+      <div className="md:hidden grid min-h-[48px] items-center overflow-hidden w-full" style={{ gridTemplateColumns: '1fr auto 1fr' }}>
         {/* Left: logo mark only (no text) */}
         <div className="flex items-center pl-4 min-w-0">
           <svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
