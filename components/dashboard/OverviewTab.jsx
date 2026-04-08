@@ -45,7 +45,9 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     }
 
     const allHoldings = holdingsRes.data ?? []
-    const holdingTickers = [...new Set(allHoldings.map((h) => h.ticker))]
+    const holdingTickers = [...new Set(allHoldings.map((h) => h.ticker))].filter(
+      (t) => t !== 'CASH',
+    )
     const wlItems = watchlistRes.data ?? []
     const wlTickers = wlItems.map((w) => w.ticker)
     const allTickers = [...new Set([...holdingTickers, ...wlTickers])]
@@ -74,10 +76,10 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     const latestSnap = (snapshotsRes.data ?? []).slice(-1)[0]
     const liveLiabTotal = (liabRes.data ?? []).reduce((sum, l) => sum + l.balance, 0)
     const topBarNetWorth = latestSnap != null ? (latestSnap.total_assets - liveLiabTotal) : null
-    const dayChange = allHoldings.reduce(
-      (sum, h) => sum + h.shares * (priceMap[h.ticker]?.change ?? 0),
-      0,
-    )
+    const dayChange = allHoldings.reduce((sum, h) => {
+      if (h.ticker === 'CASH') return sum
+      return sum + h.shares * (priceMap[h.ticker]?.change ?? 0)
+    }, 0)
     onDataLoaded?.({
       value: topBarNetWorth,
       change: dayChange,

@@ -8,14 +8,16 @@ import OverviewTab from '@/components/dashboard/OverviewTab'
 import AccountsTab from '@/components/dashboard/AccountsTab'
 import PortfolioTab from '@/components/dashboard/PortfolioTab'
 import WatchlistTab from '@/components/dashboard/WatchlistTab'
+import SettingsTab from '@/components/dashboard/SettingsTab'
 import StockDrawer from '@/components/StockDrawer'
-import { LayoutDashboard, Briefcase, PieChart, Star, X } from 'lucide-react'
+import { LayoutDashboard, Briefcase, PieChart, Star, Settings2, X } from 'lucide-react'
 
 const TABS = [
   { id: 'overview',  label: 'Overview',  icon: LayoutDashboard },
   { id: 'accounts',  label: 'Accounts',  icon: Briefcase },
   { id: 'portfolio', label: 'Portfolio', icon: PieChart },
   { id: 'watchlist', label: 'Watchlist', icon: Star },
+  { id: 'settings',  label: 'Settings',  icon: Settings2 },
 ]
 
 export default function App() {
@@ -190,6 +192,9 @@ export default function App() {
             isDemo={isDemo}
             onDemoBlock={showDemoToast}
           />
+        )}
+        {activeTab === 'settings' && (
+          <SettingsTab isDemo={isDemo} onDemoBlock={showDemoToast} />
         )}
       </main>
 

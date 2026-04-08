@@ -28,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Trash2, Plus, ChevronDown, ChevronRight, Pencil } from 'lucide-react'
+import { Trash2, Plus, ChevronDown, ChevronRight, Pencil, RefreshCw } from 'lucide-react'
 
 const fmt = (v) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v ?? 0)
@@ -144,7 +144,9 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
       grouped[h.account_id].push(h)
     }
 
-    const tickers = [...new Set((holdingsRes.data ?? []).map((h) => h.ticker))]
+    const tickers = [...new Set((holdingsRes.data ?? []).map((h) => h.ticker))].filter(
+      (t) => t !== 'CASH',
+    )
     const priceResults = await Promise.all(
       tickers.map((t) =>
         fetch(`/api/stock/quote?ticker=${t}`)
@@ -171,10 +173,10 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
   }, [loadData])
 
   function accountTotal(accountId) {
-    return (holdings[accountId] ?? []).reduce(
-      (sum, h) => sum + h.shares * (prices[h.ticker]?.price ?? 0),
-      0,
-    )
+    return (holdings[accountId] ?? []).reduce((sum, h) => {
+      if (h.ticker === 'CASH') return sum + h.avg_cost_basis
+      return sum + h.shares * (prices[h.ticker]?.price ?? 0)
+    }, 0)
   }
 
   // Account CRUD
@@ -447,7 +449,26 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                         <ChevronRight className="h-3.5 w-3.5 text-[#7d8590] flex-shrink-0" />
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-[#e6edf3] truncate">{acc.name}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm text-[#e6edf3] truncate">{acc.name}</p>
+                          {acc.is_synced && (
+                            <span
+                              style={{
+                                background: 'rgba(16,185,129,0.1)',
+                                color: '#10b981',
+                                fontSize: 9,
+                                letterSpacing: '0.06em',
+                                padding: '1px 5px',
+                                borderRadius: 3,
+                                fontFamily: 'monospace',
+                                textTransform: 'uppercase',
+                                flexShrink: 0,
+                              }}
+                            >
+                              SYNCED
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-xs text-[#7d8590]">{acc.provider}</span>
                           <Badge variant="secondary" className="text-xs py-0 h-4">
@@ -458,26 +479,30 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                     </button>
                     <div className="flex items-center gap-3 ml-2 flex-shrink-0">
                       <span className="font-mono text-sm text-[#e6edf3]">{fmt(total)}</span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          openEditAccount(acc)
-                        }}
-                        className="text-[#7d8590] hover:text-[#10b981] transition-colors"
-                        style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      >
-                        <Pencil className="h-[13px] w-[13px]" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          deleteAccount(acc.id)
-                        }}
-                        className="text-[#7d8590] hover:text-[#f87171] transition-colors"
-                        style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {!acc.is_synced && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openEditAccount(acc)
+                          }}
+                          className="text-[#7d8590] hover:text-[#10b981] transition-colors"
+                          style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          <Pencil className="h-[13px] w-[13px]" />
+                        </button>
+                      )}
+                      {!acc.is_synced && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteAccount(acc.id)
+                          }}
+                          className="text-[#7d8590] hover:text-[#f87171] transition-colors"
+                          style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -509,57 +534,80 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                           </div>
                           <div className="space-y-0.5">
                             {holdList.map((h) => {
-                              const livePrice = prices[h.ticker]?.price ?? 0
-                              const value = h.shares * livePrice
-                              const costBasis = h.shares * h.avg_cost_basis
-                              const gainLoss = value - costBasis
-                              const gainPct = costBasis > 0 ? (gainLoss / costBasis) * 100 : 0
+                              const isCash = h.ticker === 'CASH'
+                              const livePrice = isCash
+                                ? h.avg_cost_basis
+                                : (prices[h.ticker]?.price ?? 0)
+                              const value = isCash ? h.avg_cost_basis : h.shares * livePrice
+                              const costBasis = isCash ? h.avg_cost_basis : h.shares * h.avg_cost_basis
+                              const gainLoss = isCash ? 0 : value - costBasis
+                              const gainPct = isCash ? 0 : costBasis > 0 ? (gainLoss / costBasis) * 100 : 0
                               const positive = gainLoss >= 0
                               return (
                                 <div
                                   key={h.id}
                                   className="grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto] gap-x-4 items-center py-1.5 border-b border-[#21262d] last:border-0"
                                 >
-                                  <button
-                                    onClick={() => onOpenDrawer(h.ticker)}
-                                    className="font-mono text-xs text-[#10b981] hover:text-[#34d399] transition-colors w-12"
-                                  >
-                                    {h.ticker}
-                                  </button>
+                                  <div className="flex items-center gap-1 w-14">
+                                    {isCash ? (
+                                      <span className="font-mono text-xs text-[#7d8590]">Cash</span>
+                                    ) : (
+                                      <button
+                                        onClick={() => onOpenDrawer(h.ticker)}
+                                        className="font-mono text-xs text-[#10b981] hover:text-[#34d399] transition-colors"
+                                      >
+                                        {h.ticker}
+                                      </button>
+                                    )}
+                                    {h.is_synced && (
+                                      <RefreshCw
+                                        className="flex-shrink-0"
+                                        style={{ width: 10, height: 10, color: 'rgba(16,185,129,0.5)' }}
+                                      />
+                                    )}
+                                  </div>
                                   <span />
                                   <span className="font-mono text-xs text-[#e6edf3] text-right hidden md:block">
-                                    {h.shares}
+                                    {isCash ? '-' : h.shares}
                                   </span>
                                   <span className="font-mono text-xs text-[#e6edf3] text-right hidden md:block">
-                                    {fmt(h.avg_cost_basis)}
+                                    {isCash ? '-' : fmt(h.avg_cost_basis)}
                                   </span>
                                   <span className="font-mono text-xs text-[#e6edf3] text-right">
-                                    {fmt(livePrice)}
+                                    {isCash ? '-' : fmt(livePrice)}
                                   </span>
                                   <span className="font-mono text-xs text-[#e6edf3] text-right">
                                     {fmt(value)}
                                   </span>
                                   <div className="flex items-center gap-2 justify-end">
-                                    <span
-                                      className={`font-mono text-xs ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}
-                                    >
-                                      {positive ? '+' : ''}
-                                      {gainPct.toFixed(2)}%
-                                    </span>
-                                    <button
-                                      onClick={() => openEditHolding(h)}
-                                      className="text-[#7d8590] hover:text-[#10b981] transition-colors"
-                                      style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                    >
-                                      <Pencil className="h-[13px] w-[13px]" />
-                                    </button>
-                                    <button
-                                      onClick={() => deleteHolding(h.id)}
-                                      className="text-[#7d8590] hover:text-[#f87171] transition-colors"
-                                      style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </button>
+                                    {isCash ? (
+                                      <span className="font-mono text-xs text-[#7d8590]">-</span>
+                                    ) : (
+                                      <span
+                                        className={`font-mono text-xs ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}
+                                      >
+                                        {positive ? '+' : ''}
+                                        {gainPct.toFixed(2)}%
+                                      </span>
+                                    )}
+                                    {!h.is_synced && (
+                                      <button
+                                        onClick={() => openEditHolding(h)}
+                                        className="text-[#7d8590] hover:text-[#10b981] transition-colors"
+                                        style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                      >
+                                        <Pencil className="h-[13px] w-[13px]" />
+                                      </button>
+                                    )}
+                                    {!h.is_synced && (
+                                      <button
+                                        onClick={() => deleteHolding(h.id)}
+                                        className="text-[#7d8590] hover:text-[#f87171] transition-colors"
+                                        style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                               )

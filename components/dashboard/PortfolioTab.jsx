@@ -65,7 +65,9 @@ export default function PortfolioTab({ onOpenDrawer }) {
       return
     }
 
-    const tickers = [...new Set((allHoldings ?? []).map((h) => h.ticker))]
+    const tickers = [...new Set((allHoldings ?? []).map((h) => h.ticker))].filter(
+      (t) => t !== 'CASH',
+    )
     const priceResults = await Promise.all(
       tickers.map((t) =>
         fetch(`/api/stock/quote?ticker=${t}`)
@@ -80,6 +82,18 @@ export default function PortfolioTab({ onOpenDrawer }) {
     })
 
     const enriched = (allHoldings ?? []).map((h) => {
+      if (h.ticker === 'CASH') {
+        return {
+          ...h,
+          account: h.accounts?.name ?? '--',
+          avgCost: h.avg_cost_basis,
+          livePrice: h.avg_cost_basis,
+          hasPrice: true,
+          value: h.avg_cost_basis,
+          gainLoss: 0,
+          gainPct: 0,
+        }
+      }
       const hasPrice = priceMap[h.ticker]?.price != null && priceMap[h.ticker].price > 0
       const livePrice = hasPrice ? priceMap[h.ticker].price : null
       const value = hasPrice ? h.shares * livePrice : null

@@ -27,6 +27,7 @@ const TABS = [
   { id: 'accounts',  label: 'ACCOUNTS',  icon: Briefcase },
   { id: 'portfolio', label: 'PORTFOLIO', icon: PieChart },
   { id: 'watchlist', label: 'WATCHLIST', icon: Star },
+  { id: 'settings',  label: 'SETTINGS',  icon: Settings },
 ]
 
 const ADD_TYPES = [
@@ -255,13 +256,6 @@ export default function TopBar({
             </Link>
           )}
 
-          <button
-            onClick={() => supabase.auth.signOut().then(() => window.location.reload())}
-            className="text-[#7d8590] hover:text-[#e6edf3] transition-colors"
-            title="Sign out"
-          >
-            <Settings className="h-4 w-4" />
-          </button>
         </div>
       </div>
 
@@ -306,9 +300,9 @@ export default function TopBar({
             <Plus className="h-4 w-4" />
           </button>
           <button
-            onClick={() => supabase.auth.signOut().then(() => window.location.reload())}
+            onClick={() => onTabChange('settings')}
             className="text-[#7d8590] hover:text-[#e6edf3] transition-colors flex items-center justify-center"
-            title="Sign out"
+            title="Settings"
             style={{ minWidth: 44, minHeight: 44 }}
           >
             <Settings className="h-4 w-4" />
