@@ -88,6 +88,7 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
   const [editAccType, setEditAccType] = useState('brokerage')
   const [editAccSaving, setEditAccSaving] = useState(false)
   const [editAccError, setEditAccError] = useState(null)
+  const [editAccIsSynced, setEditAccIsSynced] = useState(false)
 
   // Edit holding state
   const [editHoldDialog, setEditHoldDialog] = useState(false)
@@ -144,11 +145,27 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
       grouped[h.account_id].push(h)
     }
 
-    const tickers = [...new Set((holdingsRes.data ?? []).map((h) => h.ticker))].filter(
-      (t) => t !== 'CASH',
-    )
+    const allHoldingsList = holdingsRes.data ?? []
+
+    // Build a per-ticker fallback from synced holdings that have a last_synced_price
+    const syncedPriceMap = {}
+    for (const h of allHoldingsList) {
+      if (h.is_synced && h.last_synced_price > 0) {
+        syncedPriceMap[h.ticker] = h.last_synced_price
+      }
+    }
+
+    // Only call the quote API for tickers that need a live price:
+    // non-synced holdings, or synced holdings with no last_synced_price
+    const tickersNeedingQuote = [
+      ...new Set(
+        allHoldingsList
+          .filter((h) => h.ticker !== 'CASH' && (!h.is_synced || !h.last_synced_price))
+          .map((h) => h.ticker),
+      ),
+    ]
     const priceResults = await Promise.all(
-      tickers.map((t) =>
+      tickersNeedingQuote.map((t) =>
         fetch(`/api/stock/quote?ticker=${t}`)
           .then((r) => r.json())
           .then((q) => ({ t, q }))
@@ -159,6 +176,12 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     priceResults.forEach(({ t, q }) => {
       if (q) priceMap[t] = q
     })
+    // Apply synced fallback for any ticker with a missing or zero live price
+    for (const [ticker, syncedPrice] of Object.entries(syncedPriceMap)) {
+      if (!priceMap[ticker] || !(priceMap[ticker].price > 0)) {
+        priceMap[ticker] = { price: syncedPrice }
+      }
+    }
 
     setAccounts(accsRes.data ?? [])
     setHoldings(grouped)
@@ -219,6 +242,7 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     setEditAccName(acc.name)
     setEditAccProvider(acc.provider)
     setEditAccType(acc.type)
+    setEditAccIsSynced(acc.is_synced ?? false)
     setEditAccError(null)
     setEditAccDialog(true)
   }
@@ -228,13 +252,13 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     if (isDemo) { onDemoBlock?.(); return }
     setEditAccSaving(true)
     setEditAccError(null)
+    // Synced accounts: only name is user-editable; provider/type come from SimpleFIN
+    const updatePayload = editAccIsSynced
+      ? { name: editAccName.trim() }
+      : { name: editAccName.trim(), provider: editAccProvider.trim(), type: editAccType }
     const { error: err } = await supabase
       .from('accounts')
-      .update({
-        name: editAccName.trim(),
-        provider: editAccProvider.trim(),
-        type: editAccType,
-      })
+      .update(updatePayload)
       .eq('id', editAccId)
     if (err) {
       setEditAccError(err.message)
@@ -479,18 +503,16 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                     </button>
                     <div className="flex items-center gap-3 ml-2 flex-shrink-0">
                       <span className="font-mono text-sm text-[#e6edf3]">{fmt(total)}</span>
-                      {!acc.is_synced && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openEditAccount(acc)
-                          }}
-                          className="text-[#7d8590] hover:text-[#10b981] transition-colors"
-                          style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        >
-                          <Pencil className="h-[13px] w-[13px]" />
-                        </button>
-                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openEditAccount(acc)
+                        }}
+                        className="text-[#7d8590] hover:text-[#10b981] transition-colors"
+                        style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Pencil className="h-[13px] w-[13px]" />
+                      </button>
                       {!acc.is_synced && (
                         <button
                           onClick={(e) => {
@@ -866,26 +888,48 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                 required
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Provider</Label>
-              <Input
-                value={editAccProvider}
-                onChange={(e) => setEditAccProvider(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Type</Label>
-              <Select value={editAccType} onValueChange={setEditAccType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="brokerage">Brokerage</SelectItem>
-                  <SelectItem value="retirement">Retirement</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {editAccIsSynced ? (
+              <>
+                <div className="space-y-1.5">
+                  <Label>Provider</Label>
+                  <p className="text-sm text-[#e6edf3] px-3 py-2 bg-[#0d1117] rounded border border-[#21262d]">
+                    {editAccProvider}
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Type</Label>
+                  <p className="text-sm text-[#e6edf3] capitalize px-3 py-2 bg-[#0d1117] rounded border border-[#21262d]">
+                    {editAccType}
+                  </p>
+                </div>
+                <p style={{ fontSize: 11, color: '#7d8590' }}>
+                  Provider and type are managed by SimpleFIN sync
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <Label>Provider</Label>
+                  <Input
+                    value={editAccProvider}
+                    onChange={(e) => setEditAccProvider(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Type</Label>
+                  <Select value={editAccType} onValueChange={setEditAccType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="brokerage">Brokerage</SelectItem>
+                      <SelectItem value="retirement">Retirement</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
             {editAccError && <p className="text-sm text-[#f87171]">{editAccError}</p>}
             <div className="flex gap-2">
               <Button

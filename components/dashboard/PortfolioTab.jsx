@@ -65,11 +65,24 @@ export default function PortfolioTab({ onOpenDrawer }) {
       return
     }
 
+    // Build per-ticker fallback from synced holdings with a last_synced_price
+    const syncedPriceMap = {}
+    for (const h of allHoldings ?? []) {
+      if (h.is_synced && h.last_synced_price > 0) {
+        syncedPriceMap[h.ticker] = h.last_synced_price
+      }
+    }
+
+    // Only call quote API for tickers that need a live price
     const tickers = [...new Set((allHoldings ?? []).map((h) => h.ticker))].filter(
       (t) => t !== 'CASH',
     )
+    const tickersNeedingQuote = tickers.filter(
+      (t) => !(syncedPriceMap[t] > 0) ||
+        (allHoldings ?? []).some((h) => h.ticker === t && !h.is_synced),
+    )
     const priceResults = await Promise.all(
-      tickers.map((t) =>
+      tickersNeedingQuote.map((t) =>
         fetch(`/api/stock/quote?ticker=${t}`)
           .then((r) => r.json())
           .then((q) => ({ t, q }))
@@ -80,6 +93,12 @@ export default function PortfolioTab({ onOpenDrawer }) {
     priceResults.forEach(({ t, q }) => {
       if (q) priceMap[t] = q
     })
+    // Apply synced fallback for any ticker with a missing or zero live price
+    for (const [ticker, syncedPrice] of Object.entries(syncedPriceMap)) {
+      if (!priceMap[ticker] || !(priceMap[ticker].price > 0)) {
+        priceMap[ticker] = { price: syncedPrice }
+      }
+    }
 
     const enriched = (allHoldings ?? []).map((h) => {
       if (h.ticker === 'CASH') {

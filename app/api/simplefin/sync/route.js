@@ -85,38 +85,72 @@ export async function POST() {
     let holdingsSynced = 0
 
     for (const sfAcc of sfAccounts) {
-      // Upsert account
-      const { data: upsertedAcc, error: accErr } = await supabase
+      // Preserve user-edited names: insert with SimpleFIN name only on first sync,
+      // update provider/type/is_synced on subsequent syncs without touching name.
+      const { data: existingAcc } = await supabase
         .from('accounts')
-        .upsert(
-          {
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('simplefin_id', sfAcc.id)
+        .maybeSingle()
+
+      let accountId
+      if (existingAcc) {
+        await supabase
+          .from('accounts')
+          .update({
+            provider: sfAcc.org?.name ?? 'SimpleFIN',
+            type: detectAccountType(sfAcc.name),
+            is_synced: true,
+          })
+          .eq('id', existingAcc.id)
+        accountId = existingAcc.id
+      } else {
+        const { data: newAcc, error: insertErr } = await supabase
+          .from('accounts')
+          .insert({
             user_id: user.id,
             name: sfAcc.name,
             provider: sfAcc.org?.name ?? 'SimpleFIN',
             type: detectAccountType(sfAcc.name),
             simplefin_id: sfAcc.id,
             is_synced: true,
-          },
-          { onConflict: 'user_id,simplefin_id' },
-        )
-        .select('id')
-        .single()
-
-      if (accErr) {
-        console.error('Account upsert error:', accErr.message)
-        continue
+          })
+          .select('id')
+          .single()
+        if (insertErr) {
+          console.error('Account insert error:', insertErr.message)
+          continue
+        }
+        accountId = newAcc.id
       }
 
       accountsSynced++
-      const accountId = upsertedAcc.id
-
       const sfHoldings = sfAcc.holdings ?? []
 
       if (sfHoldings.length > 0) {
+        // Deduplicate by holding.id in case SimpleFIN returns duplicates
+        const seenHoldingIds = new Set()
         for (const h of sfHoldings) {
-          const sharesNum = parseFloat(h.shares ?? 0)
+          if (seenHoldingIds.has(h.id)) continue
+          seenHoldingIds.add(h.id)
+
+          const marketValue = parseFloat(h.market_value ?? 0)
+          let sharesNum = parseFloat(h.shares ?? 0)
           const costBasisNum = parseFloat(h.cost_basis ?? 0)
           const avgCost = sharesNum > 0 && costBasisNum > 0 ? costBasisNum / sharesNum : 0
+
+          // Compute last_synced_price: market value per share from SimpleFIN
+          let lastSyncedPrice = null
+          if (marketValue > 0) {
+            if (sharesNum > 0) {
+              lastSyncedPrice = marketValue / sharesNum
+            } else {
+              // No share count — treat as single unit at market value
+              sharesNum = 1
+              lastSyncedPrice = marketValue
+            }
+          }
 
           const { error: holdErr } = await supabase
             .from('holdings')
@@ -128,6 +162,7 @@ export async function POST() {
                 avg_cost_basis: avgCost,
                 simplefin_id: h.id,
                 is_synced: true,
+                last_synced_price: lastSyncedPrice,
                 updated_at: new Date().toISOString(),
               },
               { onConflict: 'account_id,simplefin_id' },
@@ -141,6 +176,7 @@ export async function POST() {
         }
       } else if (sfAcc.balance != null) {
         // Cash account — store as CASH holding
+        const cashBalance = parseFloat(sfAcc.balance)
         const { error: cashErr } = await supabase
           .from('holdings')
           .upsert(
@@ -148,9 +184,10 @@ export async function POST() {
               account_id: accountId,
               ticker: 'CASH',
               shares: 1,
-              avg_cost_basis: parseFloat(sfAcc.balance),
+              avg_cost_basis: cashBalance,
               simplefin_id: `${sfAcc.id}-cash`,
               is_synced: true,
+              last_synced_price: null,
               updated_at: new Date().toISOString(),
             },
             { onConflict: 'account_id,simplefin_id' },
