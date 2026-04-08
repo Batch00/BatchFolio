@@ -47,8 +47,11 @@ export async function POST(request) {
     // Use service role to write — bypasses RLS
     const supabaseService = createServiceClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-      { db: { schema: 'batchfolio' } },
+      process.env.SERVICE_ROLE_KEY,
+      {
+        auth: { autoRefreshToken: false, persistSession: false },
+        db: { schema: 'batchfolio' },
+      },
     )
 
     const { error: upsertErr } = await supabaseService
