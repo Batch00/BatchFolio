@@ -79,6 +79,7 @@ export async function POST() {
       throw new Error(`SimpleFIN returned ${sfRes.status}`)
     }
     const sfData = await sfRes.json()
+    console.log('SimpleFIN raw response:', JSON.stringify(sfData, null, 2))
     const sfAccounts = sfData.accounts ?? []
 
     let accountsSynced = 0
