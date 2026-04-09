@@ -79,11 +79,11 @@ export async function POST() {
       throw new Error(`SimpleFIN returned ${sfRes.status}`)
     }
     const sfData = await sfRes.json()
-    console.log('SimpleFIN raw response:', JSON.stringify(sfData, null, 2))
     const sfAccounts = sfData.accounts ?? []
 
     let accountsSynced = 0
     let holdingsSynced = 0
+    let logCount = 0
 
     for (const sfAcc of sfAccounts) {
       // Preserve user-edited names: insert with SimpleFIN name only on first sync,
@@ -136,6 +136,18 @@ export async function POST() {
           if (seenHoldingIds.has(h.id)) continue
           seenHoldingIds.add(h.id)
 
+          if (logCount < 3) {
+            console.log('SimpleFIN holding fields:', {
+              allKeys: Object.keys(h),
+              id: h.id,
+              symbol: h.symbol,
+              shares: h.shares,
+              market_value: h.market_value,
+              cost_basis: h.cost_basis,
+            })
+            logCount++
+          }
+
           const marketValue = parseFloat(h.market_value ?? 0)
           let sharesNum = parseFloat(h.shares ?? 0)
           const costBasisNum = parseFloat(h.cost_basis ?? 0)
@@ -177,7 +189,8 @@ export async function POST() {
         }
       } else if (sfAcc.balance != null) {
         // Cash account — store as CASH holding
-        const cashBalance = parseFloat(sfAcc.balance)
+        // Use 0.01 minimum to satisfy the avg_cost_basis > 0 check constraint
+        const cashBalance = Math.max(parseFloat(sfAcc.balance ?? 0), 0.01)
         const { error: cashErr } = await supabase
           .from('holdings')
           .upsert(
