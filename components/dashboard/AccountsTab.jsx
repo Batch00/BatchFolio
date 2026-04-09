@@ -147,41 +147,38 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
 
     const allHoldingsList = holdingsRes.data ?? []
 
-    // Build a per-ticker fallback from synced holdings that have a last_synced_price
-    const syncedPriceMap = {}
-    for (const h of allHoldingsList) {
-      if (h.is_synced && h.last_synced_price > 0) {
-        syncedPriceMap[h.ticker] = h.last_synced_price
-      }
-    }
+    const manualHoldings = allHoldingsList.filter((h) => !h.is_synced)
+    const syncedHoldings = allHoldingsList.filter((h) => h.is_synced)
 
-    // Only call the quote API for tickers that need a live price:
-    // non-synced holdings, or synced holdings with no last_synced_price
-    const tickersNeedingQuote = [
-      ...new Set(
-        allHoldingsList
-          .filter((h) => h.ticker !== 'CASH' && (!h.is_synced || !h.last_synced_price))
+    // Build price map directly from last_synced_price — no API call needed
+    const syncedPriceMap = {}
+    syncedHoldings.forEach((h) => {
+      if (h.last_synced_price > 0) syncedPriceMap[h.ticker] = { price: h.last_synced_price }
+    })
+
+    // Only call Finnhub for manual holdings and synced holdings with no price
+    const tickersNeedingQuotes = [
+      ...new Set([
+        ...manualHoldings.map((h) => h.ticker),
+        ...syncedHoldings
+          .filter((h) => !h.last_synced_price || h.last_synced_price <= 0)
           .map((h) => h.ticker),
-      ),
-    ]
+      ]),
+    ].filter((t) => t !== 'CASH')
+
     const priceResults = await Promise.all(
-      tickersNeedingQuote.map((t) =>
+      tickersNeedingQuotes.map((t) =>
         fetch(`/api/stock/quote?ticker=${t}`)
           .then((r) => r.json())
           .then((q) => ({ t, q }))
           .catch(() => ({ t, q: null })),
       ),
     )
-    const priceMap = {}
+    const liveQuoteMap = {}
     priceResults.forEach(({ t, q }) => {
-      if (q) priceMap[t] = q
+      if (q) liveQuoteMap[t] = q
     })
-    // Apply synced fallback for any ticker with a missing or zero live price
-    for (const [ticker, syncedPrice] of Object.entries(syncedPriceMap)) {
-      if (!priceMap[ticker] || !(priceMap[ticker].price > 0)) {
-        priceMap[ticker] = { price: syncedPrice }
-      }
-    }
+    const priceMap = { ...syncedPriceMap, ...liveQuoteMap }
 
     setAccounts(accsRes.data ?? [])
     setHoldings(grouped)

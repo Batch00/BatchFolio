@@ -52,17 +52,17 @@ export async function POST() {
       return Response.json({ error: 'No SimpleFIN connection' }, { status: 400 })
     }
 
-    // Check if synced within the last hour
-    if (conn.last_synced_at) {
-      const lastSynced = new Date(conn.last_synced_at)
-      const hourAgo = new Date(Date.now() - 60 * 60 * 1000)
-      if (lastSynced > hourAgo) {
-        return Response.json({
-          alreadySynced: true,
-          message: 'Already synced recently. SimpleFIN updates once per day.',
-        })
-      }
-    }
+    // Rate limit disabled for debugging — re-enable when done
+    // if (conn.last_synced_at) {
+    //   const lastSynced = new Date(conn.last_synced_at)
+    //   const hourAgo = new Date(Date.now() - 60 * 60 * 1000)
+    //   if (lastSynced > hourAgo) {
+    //     return Response.json({
+    //       alreadySynced: true,
+    //       message: 'Already synced recently. SimpleFIN updates once per day.',
+    //     })
+    //   }
+    // }
 
     // Parse access URL for credentials
     const url = new URL(conn.access_url)
@@ -148,22 +148,22 @@ export async function POST() {
             logCount++
           }
 
-          const marketValue = parseFloat(h.market_value ?? 0)
-          let sharesNum = parseFloat(h.shares ?? 0)
+          const mv = parseFloat(h.market_value)
+          const sh = parseFloat(h.shares)
+          let sharesNum = !isNaN(sh) ? sh : 0
           const costBasisNum = parseFloat(h.cost_basis ?? 0)
           const avgCost = sharesNum > 0 && costBasisNum > 0 ? costBasisNum / sharesNum : 0
 
           // Compute last_synced_price: market value per share from SimpleFIN
-          let lastSyncedPrice = null
-          if (marketValue > 0) {
-            if (sharesNum > 0) {
-              lastSyncedPrice = marketValue / sharesNum
-            } else {
-              // No share count — treat as single unit at market value
-              sharesNum = 1
-              lastSyncedPrice = marketValue
-            }
+          const lastSyncedPrice = (!isNaN(mv) && !isNaN(sh) && sh > 0)
+            ? mv / sh
+            : (!isNaN(mv) && mv > 0 ? mv : null)
+
+          if (sharesNum <= 0 && !isNaN(mv) && mv > 0) {
+            sharesNum = 1
           }
+
+          console.log('last_synced_price computed:', lastSyncedPrice, 'for', h.symbol)
 
           const { error: holdErr } = await supabase
             .from('holdings')

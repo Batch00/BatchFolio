@@ -46,47 +46,45 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
 
     const allHoldings = holdingsRes.data ?? []
 
-    // Build per-ticker fallback from synced holdings with a last_synced_price
-    const syncedPriceMap = {}
-    for (const h of allHoldings) {
-      if (h.is_synced && h.last_synced_price > 0) {
-        syncedPriceMap[h.ticker] = h.last_synced_price
-      }
-    }
+    const manualHoldings = allHoldings.filter((h) => !h.is_synced)
+    const syncedHoldings = allHoldings.filter((h) => h.is_synced)
 
-    // Only call quote API for tickers that need a live price
-    const holdingTickersNeedingQuote = [
-      ...new Set(
-        allHoldings
-          .filter((h) => h.ticker !== 'CASH' && (!h.is_synced || !h.last_synced_price))
-          .map((h) => h.ticker),
-      ),
-    ]
+    // Build price map directly from last_synced_price — no API call needed
+    const syncedPriceMap = {}
+    syncedHoldings.forEach((h) => {
+      if (h.last_synced_price > 0) syncedPriceMap[h.ticker] = { price: h.last_synced_price }
+    })
+
+    const wlItems = watchlistRes.data ?? []
+    const wlTickers = wlItems.map((w) => w.ticker)
+
+    // Only call Finnhub for manual holdings, synced holdings with no price, and watchlist
     const holdingTickers = [...new Set(allHoldings.map((h) => h.ticker))].filter(
       (t) => t !== 'CASH',
     )
-    const wlItems = watchlistRes.data ?? []
-    const wlTickers = wlItems.map((w) => w.ticker)
-    const allTickers = [...new Set([...holdingTickersNeedingQuote, ...wlTickers])]
+    const tickersNeedingQuotes = [
+      ...new Set([
+        ...manualHoldings.map((h) => h.ticker),
+        ...syncedHoldings
+          .filter((h) => !h.last_synced_price || h.last_synced_price <= 0)
+          .map((h) => h.ticker),
+        ...wlTickers,
+      ]),
+    ].filter((t) => t !== 'CASH')
 
     const priceResults = await Promise.all(
-      allTickers.map((t) =>
+      tickersNeedingQuotes.map((t) =>
         fetch(`/api/stock/quote?ticker=${t}`)
           .then((r) => r.json())
           .then((q) => ({ t, q }))
           .catch(() => ({ t, q: null })),
       ),
     )
-    const priceMap = {}
+    const liveQuoteMap = {}
     priceResults.forEach(({ t, q }) => {
-      if (q) priceMap[t] = q
+      if (q) liveQuoteMap[t] = q
     })
-    // Apply synced fallback for any ticker with a missing or zero live price
-    for (const [ticker, syncedPrice] of Object.entries(syncedPriceMap)) {
-      if (!priceMap[ticker] || !(priceMap[ticker].price > 0)) {
-        priceMap[ticker] = { price: syncedPrice }
-      }
-    }
+    const priceMap = { ...syncedPriceMap, ...liveQuoteMap }
 
     setSnapshots(snapshotsRes.data ?? [])
     setHoldings(allHoldings)
