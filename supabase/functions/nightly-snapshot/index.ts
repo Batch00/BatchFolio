@@ -32,7 +32,9 @@ async function syncSimpleFINForUser(
     const baseUrl = `${url.protocol}//${url.host}${url.pathname}`
     const credentials = btoa(`${username}:${password}`)
 
-    const sfRes = await fetch(`${baseUrl}/accounts?version=2`, {
+    // Fetch 90 days of data including transactions
+    const startDate = Math.floor((Date.now() - 90 * 24 * 60 * 60 * 1000) / 1000)
+    const sfRes = await fetch(`${baseUrl}/accounts?version=2&start-date=${startDate}`, {
       headers: { Authorization: `Basic ${credentials}` },
     })
     if (!sfRes.ok) return
@@ -42,11 +44,40 @@ async function syncSimpleFINForUser(
       id: string
       name: string
       balance?: string
+      'available-balance'?: string
+      'balance-date'?: number
+      currency?: string
       org?: { name?: string }
-      holdings?: { id: string; symbol: string; shares?: string; cost_basis?: string }[]
+      holdings?: {
+        id: string
+        symbol: string
+        shares?: string
+        cost_basis?: string
+        purchase_price?: string
+        description?: string
+        currency?: string
+        market_value?: string
+      }[]
+      transactions?: {
+        id: string
+        posted?: number
+        transacted_at?: string
+        amount?: string
+        description?: string
+        payee?: string
+        memo?: string
+        pending?: boolean
+      }[]
     }[] = sfData.accounts ?? []
 
     for (const sfAcc of sfAccounts) {
+      const balanceNum = parseFloat(sfAcc.balance ?? '0') || 0
+      const availableBalanceNum = parseFloat(sfAcc['available-balance'] ?? '0') || 0
+      const currency = sfAcc.currency || 'USD'
+      const lastBalanceDate = sfAcc['balance-date']
+        ? new Date(sfAcc['balance-date'] * 1000).toISOString()
+        : null
+
       const { data: upsertedAcc } = await supabase
         .from('accounts')
         .upsert(
@@ -57,6 +88,10 @@ async function syncSimpleFINForUser(
             type: detectAccountType(sfAcc.name),
             simplefin_id: sfAcc.id,
             is_synced: true,
+            balance: balanceNum,
+            available_balance: availableBalanceNum,
+            currency,
+            last_balance_date: lastBalanceDate,
           },
           { onConflict: 'user_id,simplefin_id' },
         )
@@ -69,9 +104,25 @@ async function syncSimpleFINForUser(
 
       if (sfHoldings.length > 0) {
         for (const h of sfHoldings) {
-          const sharesNum = parseFloat(h.shares ?? '0')
-          const costBasisNum = parseFloat(h.cost_basis ?? '0')
-          const avgCost = sharesNum > 0 && costBasisNum > 0 ? costBasisNum / sharesNum : 0
+          const sh = parseFloat(h.shares ?? '0')
+          const sharesNum = !isNaN(sh) ? sh : 0
+          const costBasisTotal = parseFloat(h.cost_basis ?? '0') > 0 ? parseFloat(h.cost_basis ?? '0') : null
+          const purchasePrice = parseFloat(h.purchase_price ?? '0') > 0 ? parseFloat(h.purchase_price ?? '0') : null
+          const mv = parseFloat(h.market_value ?? '0')
+
+          let avgCost: number
+          if (costBasisTotal && costBasisTotal > 0 && sharesNum > 0) {
+            avgCost = costBasisTotal / sharesNum
+          } else if (purchasePrice && purchasePrice > 0) {
+            avgCost = purchasePrice
+          } else {
+            avgCost = 0
+          }
+
+          const lastSyncedPrice = (!isNaN(mv) && !isNaN(sh) && sh > 0)
+            ? mv / sh
+            : (!isNaN(mv) && mv > 0 ? mv : null)
+
           await supabase.from('holdings').upsert(
             {
               account_id: accountId,
@@ -80,6 +131,11 @@ async function syncSimpleFINForUser(
               avg_cost_basis: avgCost,
               simplefin_id: h.id,
               is_synced: true,
+              last_synced_price: lastSyncedPrice,
+              description: h.description || null,
+              cost_basis_total: costBasisTotal,
+              currency: h.currency || 'USD',
+              purchase_price: purchasePrice,
               updated_at: new Date().toISOString(),
             },
             { onConflict: 'account_id,simplefin_id' },
@@ -97,6 +153,34 @@ async function syncSimpleFINForUser(
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'account_id,simplefin_id' },
+        )
+      }
+
+      // Sync transactions
+      const sfTransactions = sfAcc.transactions ?? []
+      for (const tx of sfTransactions) {
+        if (!tx.id) continue
+        const amount = parseFloat(tx.amount ?? '0')
+        if (amount === 0 || isNaN(amount)) continue
+
+        await supabase.from('transactions').upsert(
+          {
+            account_id: accountId,
+            user_id: uid,
+            simplefin_id: tx.id,
+            posted_at: tx.posted
+              ? new Date(tx.posted * 1000).toISOString()
+              : null,
+            transacted_at: tx.transacted_at
+              ? new Date(tx.transacted_at * 1000).toISOString()
+              : null,
+            amount,
+            description: tx.description || null,
+            payee: tx.payee || null,
+            memo: tx.memo || null,
+            pending: tx.pending || false,
+          },
+          { onConflict: 'simplefin_id' },
         )
       }
     }
@@ -136,26 +220,34 @@ Deno.serve(async () => {
       // Sync SimpleFIN data first (if user has a connection)
       await syncSimpleFINForUser(supabase, uid)
 
-      // Fetch accounts for this user
+      // Fetch accounts for this user (include balance for synced accounts)
       const { data: accounts } = await supabase
         .from('accounts')
-        .select('id')
+        .select('id, is_synced, balance')
         .eq('user_id', uid)
 
-      const accountIds = (accounts ?? []).map((a: { id: string }) => a.id)
+      const accountList = (accounts ?? []) as { id: string; is_synced: boolean; balance: number }[]
+      const accountIds = accountList.map((a) => a.id)
 
-      // Fetch all holdings across those accounts
-      let holdings: { ticker: string; shares: number; avg_cost_basis: number }[] = []
-      if (accountIds.length > 0) {
+      // Calculate synced assets total directly from account balances
+      const syncedAssetsTotal = accountList
+        .filter((a) => a.is_synced && a.balance > 0)
+        .reduce((sum, a) => sum + a.balance, 0)
+
+      // Fetch holdings for non-synced accounts (manual)
+      const manualAccountIds = accountList.filter((a) => !a.is_synced).map((a) => a.id)
+      let manualHoldings: { ticker: string; shares: number; avg_cost_basis: number }[] = []
+
+      if (manualAccountIds.length > 0) {
         const { data: holdingRows } = await supabase
           .from('holdings')
           .select('ticker, shares, avg_cost_basis')
-          .in('account_id', accountIds)
-        holdings = holdingRows ?? []
+          .in('account_id', manualAccountIds)
+        manualHoldings = holdingRows ?? []
       }
 
-      // Get unique tickers (skip CASH) and fetch live prices from Finnhub
-      const tickers = [...new Set(holdings.map((h) => h.ticker))].filter((t) => t !== 'CASH')
+      // Get unique tickers for manual holdings (skip CASH) and fetch live prices
+      const tickers = [...new Set(manualHoldings.map((h) => h.ticker))].filter((t) => t !== 'CASH')
       const priceMap: Record<string, number> = {}
 
       await Promise.all(
@@ -172,11 +264,13 @@ Deno.serve(async () => {
         }),
       )
 
-      // Calculate total portfolio value (CASH uses avg_cost_basis as its value)
-      const totalAssets = holdings.reduce((sum, h) => {
+      // Calculate manual assets total
+      const manualAssetsTotal = manualHoldings.reduce((sum, h) => {
         if (h.ticker === 'CASH') return sum + (h.avg_cost_basis ?? 0)
         return sum + h.shares * (priceMap[h.ticker] ?? 0)
       }, 0)
+
+      const totalAssets = syncedAssetsTotal + manualAssetsTotal
 
       // Fetch total liabilities balance
       const { data: liabRows } = await supabase

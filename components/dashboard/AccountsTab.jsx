@@ -122,8 +122,8 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     setError(null)
 
     const [accsRes, holdingsRes, liabRes, snapRes] = await Promise.all([
-      supabase.from('accounts').select('*').order('created_at', { ascending: false }),
-      supabase.from('holdings').select('*').order('ticker'),
+      supabase.from('accounts').select('*, balance, available_balance, currency, last_balance_date').order('created_at', { ascending: false }),
+      supabase.from('holdings').select('*, last_synced_price, is_synced, description, cost_basis_total, currency, purchase_price').order('ticker'),
       supabase.from('liabilities').select('*').order('created_at', { ascending: false }),
       supabase
         .from('net_worth_snapshots')
@@ -192,11 +192,17 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     loadData()
   }, [loadData])
 
-  function accountTotal(accountId) {
-    return (holdings[accountId] ?? []).reduce((sum, h) => {
+  function accountTotal(acc) {
+    if (acc.is_synced && acc.balance > 0) return acc.balance
+    return (holdings[acc.id] ?? []).reduce((sum, h) => {
       if (h.ticker === 'CASH') return sum + h.avg_cost_basis
       return sum + h.shares * (prices[h.ticker]?.price ?? 0)
     }, 0)
+  }
+
+  function fmtBalanceDate(iso) {
+    if (!iso) return null
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
   // Account CRUD
@@ -450,7 +456,7 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
         ) : (
           <div className="space-y-3">
             {accounts.map((acc) => {
-              const total = accountTotal(acc.id)
+              const total = accountTotal(acc)
               const holdList = holdings[acc.id] ?? []
               const isExpanded = expanded[acc.id]
 
@@ -499,7 +505,14 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                       </div>
                     </button>
                     <div className="flex items-center gap-3 ml-2 flex-shrink-0">
-                      <span className="font-mono text-sm text-[#e6edf3]">{fmt(total)}</span>
+                      <div className="text-right">
+                        <span className="font-mono text-sm text-[#e6edf3]">{fmt(total)}</span>
+                        {acc.is_synced && acc.last_balance_date && (
+                          <p style={{ fontSize: 10, color: '#7d8590' }}>
+                            Updated {fmtBalanceDate(acc.last_balance_date)}
+                          </p>
+                        )}
+                      </div>
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
@@ -585,12 +598,24 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                                       />
                                     )}
                                   </div>
-                                  <span />
+                                  <div className="min-w-0">
+                                    {h.description && (
+                                      <p
+                                        className="truncate"
+                                        style={{ fontSize: 10, color: '#7d8590', maxWidth: 140 }}
+                                        title={h.description}
+                                      >
+                                        {h.description.length > 35
+                                          ? h.description.slice(0, 35) + '...'
+                                          : h.description}
+                                      </p>
+                                    )}
+                                  </div>
                                   <span className="font-mono text-xs text-[#e6edf3] text-right hidden md:block">
                                     {isCash ? '-' : h.shares}
                                   </span>
                                   <span className="font-mono text-xs text-[#e6edf3] text-right hidden md:block">
-                                    {isCash ? '-' : fmt(h.avg_cost_basis)}
+                                    {isCash ? '-' : fmt(h.avg_cost_basis > 0 ? h.avg_cost_basis : 0)}
                                   </span>
                                   <span className="font-mono text-xs text-[#e6edf3] text-right">
                                     {isCash ? '-' : fmt(livePrice)}

@@ -52,18 +52,6 @@ export async function POST() {
       return Response.json({ error: 'No SimpleFIN connection' }, { status: 400 })
     }
 
-    // Rate limit disabled for debugging — re-enable when done
-    // if (conn.last_synced_at) {
-    //   const lastSynced = new Date(conn.last_synced_at)
-    //   const hourAgo = new Date(Date.now() - 60 * 60 * 1000)
-    //   if (lastSynced > hourAgo) {
-    //     return Response.json({
-    //       alreadySynced: true,
-    //       message: 'Already synced recently. SimpleFIN updates once per day.',
-    //     })
-    //   }
-    // }
-
     // Parse access URL for credentials
     const url = new URL(conn.access_url)
     const username = url.username
@@ -71,8 +59,9 @@ export async function POST() {
     const baseUrl = `${url.protocol}//${url.host}${url.pathname}`
     const credentials = Buffer.from(`${username}:${password}`).toString('base64')
 
-    // Fetch accounts from SimpleFIN
-    const sfRes = await fetch(`${baseUrl}/accounts?version=2`, {
+    // Fetch accounts + transactions from SimpleFIN (90 days back)
+    const startDate = Math.floor((Date.now() - 90 * 24 * 60 * 60 * 1000) / 1000)
+    const sfRes = await fetch(`${baseUrl}/accounts?version=2&start-date=${startDate}`, {
       headers: { Authorization: `Basic ${credentials}` },
     })
     if (!sfRes.ok) {
@@ -83,6 +72,7 @@ export async function POST() {
 
     let accountsSynced = 0
     let holdingsSynced = 0
+    let transactionsSynced = 0
     let logCount = 0
 
     for (const sfAcc of sfAccounts) {
@@ -95,6 +85,13 @@ export async function POST() {
         .eq('simplefin_id', sfAcc.id)
         .maybeSingle()
 
+      const balanceNum = parseFloat(sfAcc.balance) || 0
+      const availableBalanceNum = parseFloat(sfAcc['available-balance']) || 0
+      const currency = sfAcc.currency || 'USD'
+      const lastBalanceDate = sfAcc['balance-date']
+        ? new Date(sfAcc['balance-date'] * 1000).toISOString()
+        : null
+
       let accountId
       if (existingAcc) {
         await supabase
@@ -103,6 +100,10 @@ export async function POST() {
             provider: sfAcc.org?.name ?? 'SimpleFIN',
             type: detectAccountType(sfAcc.name),
             is_synced: true,
+            balance: balanceNum,
+            available_balance: availableBalanceNum,
+            currency,
+            last_balance_date: lastBalanceDate,
           })
           .eq('id', existingAcc.id)
         accountId = existingAcc.id
@@ -116,6 +117,10 @@ export async function POST() {
             type: detectAccountType(sfAcc.name),
             simplefin_id: sfAcc.id,
             is_synced: true,
+            balance: balanceNum,
+            available_balance: availableBalanceNum,
+            currency,
+            last_balance_date: lastBalanceDate,
           })
           .select('id')
           .single()
@@ -144,6 +149,9 @@ export async function POST() {
               shares: h.shares,
               market_value: h.market_value,
               cost_basis: h.cost_basis,
+              purchase_price: h.purchase_price,
+              description: h.description,
+              currency: h.currency,
             })
             logCount++
           }
@@ -151,8 +159,18 @@ export async function POST() {
           const mv = parseFloat(h.market_value)
           const sh = parseFloat(h.shares)
           let sharesNum = !isNaN(sh) ? sh : 0
-          const costBasisNum = parseFloat(h.cost_basis ?? 0)
-          const avgCost = sharesNum > 0 && costBasisNum > 0 ? costBasisNum / sharesNum : 0
+          const costBasisTotal = parseFloat(h.cost_basis) > 0 ? parseFloat(h.cost_basis) : null
+          const purchasePrice = parseFloat(h.purchase_price) > 0 ? parseFloat(h.purchase_price) : null
+
+          // Updated avg_cost_basis calculation
+          let avgCost
+          if (costBasisTotal > 0 && sharesNum > 0) {
+            avgCost = costBasisTotal / sharesNum
+          } else if (purchasePrice > 0) {
+            avgCost = purchasePrice
+          } else {
+            avgCost = 0
+          }
 
           // Compute last_synced_price: market value per share from SimpleFIN
           const lastSyncedPrice = (!isNaN(mv) && !isNaN(sh) && sh > 0)
@@ -162,8 +180,6 @@ export async function POST() {
           if (sharesNum <= 0 && !isNaN(mv) && mv > 0) {
             sharesNum = 1
           }
-
-          console.log('last_synced_price computed:', lastSyncedPrice, 'for', h.symbol)
 
           const { error: holdErr } = await supabase
             .from('holdings')
@@ -176,6 +192,10 @@ export async function POST() {
                 simplefin_id: h.id,
                 is_synced: true,
                 last_synced_price: lastSyncedPrice,
+                description: h.description || null,
+                cost_basis_total: costBasisTotal,
+                currency: h.currency || 'USD',
+                purchase_price: purchasePrice,
                 updated_at: new Date().toISOString(),
               },
               { onConflict: 'account_id,simplefin_id' },
@@ -213,6 +233,42 @@ export async function POST() {
           holdingsSynced++
         }
       }
+
+      // Sync transactions
+      const sfTransactions = sfAcc.transactions ?? []
+      for (const tx of sfTransactions) {
+        if (!tx.id) continue
+        const amount = parseFloat(tx.amount)
+        if (amount === 0 || isNaN(amount)) continue
+
+        const { error: txErr } = await supabase
+          .from('transactions')
+          .upsert(
+            {
+              account_id: accountId,
+              user_id: user.id,
+              simplefin_id: tx.id,
+              posted_at: tx.posted
+                ? new Date(tx.posted * 1000).toISOString()
+                : null,
+              transacted_at: tx.transacted_at
+                ? new Date(tx.transacted_at * 1000).toISOString()
+                : null,
+              amount,
+              description: tx.description || null,
+              payee: tx.payee || null,
+              memo: tx.memo || null,
+              pending: tx.pending || false,
+            },
+            { onConflict: 'simplefin_id' },
+          )
+
+        if (txErr) {
+          console.error('Transaction upsert error:', txErr.message)
+        } else {
+          transactionsSynced++
+        }
+      }
     }
 
     // Update last_synced_at
@@ -221,7 +277,7 @@ export async function POST() {
       .update({ last_synced_at: new Date().toISOString() })
       .eq('user_id', user.id)
 
-    return Response.json({ success: true, accountsSynced, holdingsSynced })
+    return Response.json({ success: true, accountsSynced, holdingsSynced, transactionsSynced })
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 })
   }

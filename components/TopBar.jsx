@@ -19,15 +19,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Settings, LayoutDashboard, Briefcase, PieChart, Star, ShieldCheck, Plus } from 'lucide-react'
+import { Settings, LayoutDashboard, Briefcase, PieChart, Star, ShieldCheck, Plus, Receipt } from 'lucide-react'
 import TickerSearch from '@/components/dashboard/TickerSearch'
 
 const TABS = [
-  { id: 'overview',  label: 'OVERVIEW',  icon: LayoutDashboard },
-  { id: 'accounts',  label: 'ACCOUNTS',  icon: Briefcase },
-  { id: 'portfolio', label: 'PORTFOLIO', icon: PieChart },
-  { id: 'watchlist', label: 'WATCHLIST', icon: Star },
-  { id: 'settings',  label: 'SETTINGS',  icon: Settings },
+  { id: 'overview',      label: 'OVERVIEW',      icon: LayoutDashboard },
+  { id: 'accounts',      label: 'ACCOUNTS',      icon: Briefcase },
+  { id: 'portfolio',     label: 'PORTFOLIO',     icon: PieChart },
+  { id: 'transactions',  label: 'TRANSACTIONS',  icon: Receipt },
+  { id: 'watchlist',     label: 'WATCHLIST',     icon: Star },
+  { id: 'settings',      label: 'SETTINGS',      icon: Settings },
 ]
 
 const ADD_TYPES = [

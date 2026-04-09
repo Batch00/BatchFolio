@@ -23,6 +23,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   const [wlFundamentals, setWlFundamentals] = useState({})
   const [watchlist, setWatchlist] = useState([])
   const [liveLiabilities, setLiveLiabilities] = useState([])
+  const [liveAccounts, setLiveAccounts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [range, setRange] = useState('today')
@@ -31,11 +32,12 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     setLoading(true)
     setError(null)
 
-    const [snapshotsRes, holdingsRes, watchlistRes, liabRes] = await Promise.all([
+    const [snapshotsRes, holdingsRes, watchlistRes, liabRes, accountsRes] = await Promise.all([
       supabase.from('net_worth_snapshots').select('*').order('date', { ascending: true }),
       supabase.from('holdings').select('*'),
       supabase.from('watchlist').select('*').order('added_at', { ascending: false }),
       supabase.from('liabilities').select('balance'),
+      supabase.from('accounts').select('id, is_synced, balance'),
     ])
 
     if (snapshotsRes.error) {
@@ -45,6 +47,12 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     }
 
     const allHoldings = holdingsRes.data ?? []
+    const allAccounts = accountsRes.data ?? []
+
+    // Build synced account id set for filtering holdings
+    const syncedAccountIds = new Set(
+      allAccounts.filter((a) => a.is_synced && a.balance > 0).map((a) => a.id)
+    )
 
     const manualHoldings = allHoldings.filter((h) => !h.is_synced)
     const syncedHoldings = allHoldings.filter((h) => h.is_synced)
@@ -91,12 +99,26 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     setPrices(priceMap)
     setWatchlist(wlItems)
     setLiveLiabilities(liabRes.data ?? [])
+    setLiveAccounts(allAccounts)
     setLoading(false)
 
     // Update top bar net worth using live liabilities total
     const latestSnap = (snapshotsRes.data ?? []).slice(-1)[0]
     const liveLiabTotal = (liabRes.data ?? []).reduce((sum, l) => sum + l.balance, 0)
-    const topBarNetWorth = latestSnap != null ? (latestSnap.total_assets - liveLiabTotal) : null
+
+    // Use account balance for synced accounts, holdings * price for manual
+    const syncedAssetsLive = allAccounts
+      .filter((a) => a.is_synced && a.balance > 0)
+      .reduce((sum, a) => sum + a.balance, 0)
+    const manualAssetsLive = allHoldings
+      .filter((h) => !syncedAccountIds.has(h.account_id))
+      .reduce((sum, h) => {
+        if (h.ticker === 'CASH') return sum + h.avg_cost_basis
+        return sum + h.shares * (priceMap[h.ticker]?.price ?? 0)
+      }, 0)
+    const liveAssetsTotal = syncedAssetsLive + manualAssetsLive
+    const topBarNetWorth = liveAssetsTotal - liveLiabTotal
+
     const dayChange = allHoldings.reduce((sum, h) => {
       if (h.ticker === 'CASH') return sum
       return sum + h.shares * (priceMap[h.ticker]?.change ?? 0)
@@ -155,9 +177,23 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   }, [loadData])
 
   const latest = snapshots[snapshots.length - 1]
-  const totalAssets = latest?.total_assets ?? 0
   const liveLiabilitiesTotal = liveLiabilities.reduce((sum, l) => sum + l.balance, 0)
-  const netWorth = latest != null ? totalAssets - liveLiabilitiesTotal : 0
+
+  // Use account balance for synced accounts, holdings * price for manual
+  const syncedAccountIdSet = new Set(
+    liveAccounts.filter((a) => a.is_synced && a.balance > 0).map((a) => a.id)
+  )
+  const syncedAssetsDisplay = liveAccounts
+    .filter((a) => a.is_synced && a.balance > 0)
+    .reduce((sum, a) => sum + a.balance, 0)
+  const manualAssetsDisplay = holdings
+    .filter((h) => !syncedAccountIdSet.has(h.account_id))
+    .reduce((sum, h) => {
+      if (h.ticker === 'CASH') return sum + h.avg_cost_basis
+      return sum + h.shares * (prices[h.ticker]?.price ?? 0)
+    }, 0)
+  const totalAssets = syncedAssetsDisplay + manualAssetsDisplay
+  const netWorth = totalAssets - liveLiabilitiesTotal
 
   const dayChange = holdings.reduce(
     (sum, h) => sum + h.shares * (prices[h.ticker]?.change ?? 0),

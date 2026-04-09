@@ -57,7 +57,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
 
     const { data: allHoldings, error: holdErr } = await supabase
       .from('holdings')
-      .select('*, accounts(name)')
+      .select('*, last_synced_price, is_synced, description, cost_basis_total, currency, purchase_price, accounts(name)')
 
     if (holdErr) {
       setError(holdErr.message)
@@ -67,6 +67,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
 
     const manualHoldings = (allHoldings ?? []).filter((h) => !h.is_synced)
     const syncedHoldings = (allHoldings ?? []).filter((h) => h.is_synced)
+    const tickers = [...new Set((allHoldings ?? []).map((h) => h.ticker))].filter((t) => t !== 'CASH')
 
     // Build price map directly from last_synced_price — no API call needed
     const syncedPriceMap = {}
@@ -300,6 +301,31 @@ export default function PortfolioTab({ onOpenDrawer }) {
                     >
                       <td className="px-3 py-2.5">
                         <span className="font-mono text-[#10b981]">{h.ticker}</span>
+                        {h.currency && h.currency !== 'USD' && (
+                          <span
+                            className="ml-1.5 font-mono"
+                            style={{
+                              fontSize: 9,
+                              color: '#7d8590',
+                              background: '#21262d',
+                              borderRadius: 3,
+                              padding: '1px 4px',
+                            }}
+                          >
+                            {h.currency}
+                          </span>
+                        )}
+                        {h.description && (
+                          <p
+                            className="truncate"
+                            style={{ fontSize: 10, color: '#7d8590', maxWidth: 140 }}
+                            title={h.description}
+                          >
+                            {h.description.length > 35
+                              ? h.description.slice(0, 35) + '...'
+                              : h.description}
+                          </p>
+                        )}
                       </td>
                       <td className="px-3 py-2.5 text-[#7d8590] max-w-[140px] truncate">
                         {h.account}
@@ -308,7 +334,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                         {h.shares}
                       </td>
                       <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right hidden md:table-cell">
-                        {fmt(h.avgCost)}
+                        {h.avgCost > 0 ? fmt(h.avgCost) : '--'}
                       </td>
                       <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right">
                         {h.hasPrice ? fmt(h.livePrice) : '--'}

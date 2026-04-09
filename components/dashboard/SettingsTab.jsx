@@ -92,7 +92,7 @@ export default function SettingsTab({ isDemo, onDemoBlock }) {
         showToast(data.message)
       } else {
         setSyncResult(data)
-        showToast(`Sync complete - ${data.accountsSynced} accounts, ${data.holdingsSynced} holdings updated`)
+        showToast(`Sync complete - ${data.accountsSynced} accounts, ${data.holdingsSynced} holdings, ${data.transactionsSynced ?? 0} transactions updated`)
         await loadConnection()
       }
     } catch (err) {
@@ -156,7 +156,7 @@ export default function SettingsTab({ isDemo, onDemoBlock }) {
             )}
             {syncResult && (
               <p className="text-xs text-[#34d399]">
-                Synced {syncResult.accountsSynced} accounts, {syncResult.holdingsSynced} holdings
+                Synced {syncResult.accountsSynced} accounts, {syncResult.holdingsSynced} holdings, {syncResult.transactionsSynced ?? 0} transactions
               </p>
             )}
 
