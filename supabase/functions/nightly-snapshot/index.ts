@@ -3,7 +3,7 @@
 // Schedule nightly at midnight UTC in Supabase dashboard >
 // Edge Functions > nightly-snapshot > Schedule (cron: 0 0 * * *)
 // Required secrets: FINNHUB_API_KEY, APP_SUPABASE_URL,
-// SERVICE_ROLE_KEY
+// SERVICE_ROLE_KEY, DEMO_USER_ID (optional - skips demo user)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -78,10 +78,34 @@ async function syncSimpleFINForUser(
         ? new Date(sfAcc['balance-date'] * 1000).toISOString()
         : null
 
-      const { data: upsertedAcc } = await supabase
+      // Preserve user-edited names: check before update, never overwrite name
+      const { data: existingAcc } = await supabase
         .from('accounts')
-        .upsert(
-          {
+        .select('id')
+        .eq('user_id', uid)
+        .eq('simplefin_id', sfAcc.id)
+        .maybeSingle()
+
+      let accountId: string | null = null
+
+      if (existingAcc) {
+        // Update balance fields only - preserve user-edited name
+        await supabase
+          .from('accounts')
+          .update({
+            balance: balanceNum,
+            available_balance: availableBalanceNum,
+            currency,
+            last_balance_date: lastBalanceDate,
+            is_synced: true,
+          })
+          .eq('id', existingAcc.id)
+        accountId = existingAcc.id
+      } else {
+        // New account - insert with name from SimpleFIN
+        const { data: newAcc } = await supabase
+          .from('accounts')
+          .insert({
             user_id: uid,
             name: sfAcc.name,
             provider: sfAcc.org?.name ?? 'SimpleFIN',
@@ -92,14 +116,13 @@ async function syncSimpleFINForUser(
             available_balance: availableBalanceNum,
             currency,
             last_balance_date: lastBalanceDate,
-          },
-          { onConflict: 'user_id,simplefin_id' },
-        )
-        .select('id')
-        .maybeSingle()
+          })
+          .select('id')
+          .maybeSingle()
+        accountId = newAcc?.id ?? null
+      }
 
-      if (!upsertedAcc) continue
-      const accountId = upsertedAcc.id
+      if (!accountId) continue
       const sfHoldings = sfAcc.holdings ?? []
 
       if (sfHoldings.length > 0) {
@@ -203,6 +226,7 @@ Deno.serve(async () => {
 
   const finnhubKey = Deno.env.get('FINNHUB_API_KEY')!
   const today = new Date().toISOString().split('T')[0]
+  const DEMO_USER_ID = Deno.env.get('DEMO_USER_ID')
 
   // Get all users
   const { data: userList, error: userErr } = await supabase.auth.admin.listUsers()
@@ -211,10 +235,16 @@ Deno.serve(async () => {
   }
 
   const users = userList.users
-  const results: { uid: string; ok: boolean; error?: string }[] = []
+  const results: { uid: string; ok: boolean; skipped?: boolean; error?: string }[] = []
 
   for (const user of users) {
     const uid = user.id
+
+    // Skip demo user - their snapshot history is seeded and should not be overwritten
+    if (DEMO_USER_ID && uid === DEMO_USER_ID) {
+      results.push({ uid, ok: true, skipped: true })
+      continue
+    }
 
     try {
       // Sync SimpleFIN data first (if user has a connection)
@@ -227,7 +257,6 @@ Deno.serve(async () => {
         .eq('user_id', uid)
 
       const accountList = (accounts ?? []) as { id: string; is_synced: boolean; balance: number }[]
-      const accountIds = accountList.map((a) => a.id)
 
       // Calculate synced assets total directly from account balances
       const syncedAssetsTotal = accountList
@@ -305,11 +334,12 @@ Deno.serve(async () => {
     }
   }
 
-  const processed = results.filter((r) => r.ok).length
+  const processed = results.filter((r) => r.ok && !r.skipped).length
+  const skipped = results.filter((r) => r.skipped).length
   const failed = results.filter((r) => !r.ok).length
 
   return new Response(
-    JSON.stringify({ date: today, processed, failed, results }),
+    JSON.stringify({ date: today, processed, skipped, failed, results }),
     { headers: { 'Content-Type': 'application/json' } },
   )
 })

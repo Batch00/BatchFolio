@@ -422,6 +422,21 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
 
   return (
     <div className="p-4 space-y-6">
+      {/* Demo read-only banner */}
+      {isDemo && (
+        <div
+          className="flex items-center px-3 py-2 rounded-md"
+          style={{
+            background: 'rgba(251,191,36,0.08)',
+            border: '1px solid rgba(251,191,36,0.2)',
+          }}
+        >
+          <span style={{ color: '#fbbf24', fontSize: 12 }}>
+            Demo mode - browse read-only data. Sign up to manage your own portfolio.
+          </span>
+        </div>
+      )}
+
       {/* ---- ACCOUNTS SECTION ---- */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -431,16 +446,18 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
           >
             Accounts
           </p>
-          <button
-            onClick={() => {
-              setAccError(null)
-              setAccDialog(true)
-            }}
-            className="flex items-center gap-1 text-xs text-[#10b981] hover:text-[#34d399] transition-colors border border-[#10b981]/40 rounded px-2.5 py-1"
-          >
-            <Plus className="h-3 w-3" />
-            Add Account
-          </button>
+          {!isDemo && (
+            <button
+              onClick={() => {
+                setAccError(null)
+                setAccDialog(true)
+              }}
+              className="flex items-center gap-1 text-xs text-[#10b981] hover:text-[#34d399] transition-colors border border-[#10b981]/40 rounded px-2.5 py-1"
+            >
+              <Plus className="h-3 w-3" />
+              Add Account
+            </button>
+          )}
         </div>
 
         {error && <p className="text-xs text-[#f87171] mb-3">{error}</p>}
@@ -540,15 +557,17 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
 
                   {isExpanded && (
                     <div className="border-t border-[#21262d] bg-[#0d1117]">
-                      <div className="flex justify-end px-4 py-2">
-                        <button
-                          onClick={() => openAddHolding(acc.id)}
-                          className="text-xs text-[#10b981] hover:text-[#34d399] transition-colors flex items-center gap-1"
-                        >
-                          <Plus className="h-3 w-3" />
-                          Add Holding
-                        </button>
-                      </div>
+                      {!isDemo && (
+                        <div className="flex justify-end px-4 py-2">
+                          <button
+                            onClick={() => openAddHolding(acc.id)}
+                            className="text-xs text-[#10b981] hover:text-[#34d399] transition-colors flex items-center gap-1"
+                          >
+                            <Plus className="h-3 w-3" />
+                            Add Holding
+                          </button>
+                        </div>
+                      )}
                       {holdList.length === 0 ? (
                         <p className="text-xs text-[#7d8590] px-4 pb-3">
                           No holdings in this account.
@@ -677,16 +696,18 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
           >
             Liabilities
           </p>
-          <button
-            onClick={() => {
-              setLiabError(null)
-              setLiabDialog(true)
-            }}
-            className="flex items-center gap-1 text-xs text-[#10b981] hover:text-[#34d399] transition-colors border border-[#10b981]/40 rounded px-2.5 py-1"
-          >
-            <Plus className="h-3 w-3" />
-            Add Liability
-          </button>
+          {!isDemo && (
+            <button
+              onClick={() => {
+                setLiabError(null)
+                setLiabDialog(true)
+              }}
+              className="flex items-center gap-1 text-xs text-[#10b981] hover:text-[#34d399] transition-colors border border-[#10b981]/40 rounded px-2.5 py-1"
+            >
+              <Plus className="h-3 w-3" />
+              Add Liability
+            </button>
+          )}
         </div>
 
         <div className="bg-[#161b22] border border-[#21262d] rounded-md overflow-hidden">
@@ -729,7 +750,28 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                         l.interest_rate ? (l.balance * l.interest_rate) / 100 / 12 : null
                       return (
                         <TableRow key={l.id}>
-                          <TableCell className="text-sm">{l.name}</TableCell>
+                          <TableCell className="text-sm">
+                            <div className="flex items-center gap-2">
+                              {l.name}
+                              {l.is_synced && (
+                                <span
+                                  style={{
+                                    background: 'rgba(16,185,129,0.1)',
+                                    color: '#10b981',
+                                    fontSize: 9,
+                                    letterSpacing: '0.06em',
+                                    padding: '1px 5px',
+                                    borderRadius: 3,
+                                    fontFamily: 'monospace',
+                                    textTransform: 'uppercase',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  SYNCED
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell className="text-xs text-[#7d8590] capitalize">
                             {l.type}
                           </TableCell>
@@ -743,22 +785,24 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                             {monthlyInterest != null ? fmt(monthlyInterest) : '-'}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <button
-                                onClick={() => openEditLiability(l)}
-                                className="text-[#7d8590] hover:text-[#10b981] transition-colors"
-                                style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                              >
-                                <Pencil className="h-[13px] w-[13px]" />
-                              </button>
-                              <button
-                                onClick={() => deleteLiability(l.id)}
-                                className="text-[#7d8590] hover:text-[#f87171] transition-colors"
-                                style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
+                            {!l.is_synced && (
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  onClick={() => openEditLiability(l)}
+                                  className="text-[#7d8590] hover:text-[#10b981] transition-colors"
+                                  style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                  <Pencil className="h-[13px] w-[13px]" />
+                                </button>
+                                <button
+                                  onClick={() => deleteLiability(l.id)}
+                                  className="text-[#7d8590] hover:text-[#f87171] transition-colors"
+                                  style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            )}
                           </TableCell>
                         </TableRow>
                       )

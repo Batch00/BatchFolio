@@ -8,6 +8,14 @@ function detectAccountType(name) {
   return 'brokerage'
 }
 
+function isCreditCardAccount(name, balance) {
+  const lower = (name || '').toLowerCase()
+  return (
+    /credit|card|freedom|sapphire|venture|cash back|quicksilver|slate|ink|reserve/.test(lower) ||
+    parseFloat(balance) < 0
+  )
+}
+
 export async function POST() {
   try {
     // Get current user from session
@@ -76,6 +84,42 @@ export async function POST() {
     let logCount = 0
 
     for (const sfAcc of sfAccounts) {
+      // Auto-detect credit cards: route them to liabilities instead of accounts
+      // Requires: ALTER TABLE batchfolio.liabilities ADD COLUMN IF NOT EXISTS simplefin_id text UNIQUE;
+      //           ALTER TABLE batchfolio.liabilities ADD COLUMN IF NOT EXISTS is_synced boolean DEFAULT false;
+      if (isCreditCardAccount(sfAcc.name, sfAcc.balance)) {
+        const balanceAbs = Math.abs(parseFloat(sfAcc.balance) || 0)
+        try {
+          const { data: existingLiab } = await supabase
+            .from('liabilities')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('simplefin_id', sfAcc.id)
+            .maybeSingle()
+
+          if (existingLiab) {
+            // Update balance only, preserve user-edited name
+            await supabase
+              .from('liabilities')
+              .update({ balance: balanceAbs, is_synced: true })
+              .eq('id', existingLiab.id)
+          } else {
+            await supabase.from('liabilities').insert({
+              user_id: user.id,
+              name: sfAcc.name,
+              type: 'credit card',
+              balance: balanceAbs,
+              interest_rate: null,
+              simplefin_id: sfAcc.id,
+              is_synced: true,
+            })
+          }
+        } catch {
+          // simplefin_id column may not exist yet - skip gracefully
+        }
+        continue
+      }
+
       // Preserve user-edited names: insert with SimpleFIN name only on first sync,
       // update provider/type/is_synced on subsequent syncs without touching name.
       const { data: existingAcc } = await supabase

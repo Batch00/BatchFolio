@@ -1,16 +1,17 @@
 'use client'
 
+import { useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, Label, ResponsiveContainer } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
 
 const SLICE_COLORS = [
   '#10b981', // emerald
-  '#3b82f6', // blue
   '#f59e0b', // amber
-  '#8b5cf6', // violet
+  '#3b82f6', // blue
   '#ef4444', // red
   '#06b6d4', // cyan
   '#f97316', // orange
+  '#8b5cf6', // violet
   '#84cc16', // lime
 ]
 
@@ -21,25 +22,86 @@ function fmtCompact(v) {
 }
 
 const fmt = (v) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(v)
+
+function getAssetClass(ticker, description) {
+  const t = (ticker || '').toLowerCase()
+  const d = (description || '').toLowerCase()
+  if (t === 'cash') return 'Cash'
+  if (/bond|fixed|income|treasury|bnd|vbtlx|agg/.test(t + d)) return 'Fixed Income'
+  if (/reit|real estate|property|vnq/.test(t + d)) return 'Real Estate'
+  if (/international|intl|foreign|vxus|vtiax|eafe/.test(t + d)) return 'International'
+  return 'Equities'
+}
 
 export default function AllocationWidget({ loading, holdings }) {
+  const [view, setView] = useState('ticker')
+
   const total = holdings.reduce((s, h) => s + h.value, 0)
 
-  const data = holdings.slice(0, 6).map((h) => ({
-    ticker: h.ticker,
-    value: h.value,
-    pct: total > 0 ? (h.value / total) * 100 : 0,
-  }))
+  let data
+  if (view === 'class') {
+    const classMap = {}
+    holdings.forEach((h) => {
+      if (h.value <= 0) return
+      const cls = getAssetClass(h.ticker, h.description)
+      classMap[cls] = (classMap[cls] || 0) + h.value
+    })
+    data = Object.entries(classMap)
+      .map(([label, value]) => ({
+        ticker: label,
+        value,
+        pct: total > 0 ? (value / total) * 100 : 0,
+      }))
+      .sort((a, b) => b.value - a.value)
+  } else {
+    data = holdings
+      .filter((h) => h.value > 0)
+      .slice(0, 6)
+      .map((h) => ({
+        ticker: h.ticker,
+        value: h.value,
+        pct: total > 0 ? (h.value / total) * 100 : 0,
+      }))
+  }
 
   return (
     <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4">
-      <p
-        className="text-[10px] uppercase text-[#7d8590] font-mono mb-[10px]"
-        style={{ letterSpacing: '0.08em' }}
-      >
-        Allocation
-      </p>
+      <div className="flex items-center justify-between mb-[10px]">
+        <p
+          className="text-[10px] uppercase text-[#7d8590] font-mono"
+          style={{ letterSpacing: '0.08em' }}
+        >
+          Allocation
+        </p>
+        <div className="flex items-center gap-1">
+          {[
+            { id: 'ticker', label: 'Ticker' },
+            { id: 'class', label: 'Class' },
+          ].map((opt) => (
+            <button
+              key={opt.id}
+              onClick={() => setView(opt.id)}
+              className="font-mono transition-colors"
+              style={{
+                fontSize: 9,
+                letterSpacing: '0.05em',
+                padding: '2px 6px',
+                borderRadius: 3,
+                border: `1px solid ${view === opt.id ? '#10b981' : '#21262d'}`,
+                background: view === opt.id ? 'rgba(16,185,129,0.12)' : 'transparent',
+                color: view === opt.id ? '#10b981' : '#7d8590',
+              }}
+            >
+              {opt.label.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {loading ? (
         <Skeleton className="h-[120px]" />
@@ -49,7 +111,6 @@ export default function AllocationWidget({ loading, holdings }) {
         </div>
       ) : (
         <div className="flex flex-col items-center">
-          {/* Donut chart */}
           <div className="flex-shrink-0" style={{ width: 140, height: 140 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -101,13 +162,9 @@ export default function AllocationWidget({ loading, holdings }) {
             </ResponsiveContainer>
           </div>
 
-          {/* Legend list - vertical */}
           <div className="flex flex-col gap-1.5 w-full mt-3">
             {data.map((d, i) => (
-              <div
-                key={d.ticker}
-                className="flex items-center gap-2 px-1"
-              >
+              <div key={d.ticker} className="flex items-center gap-2 px-1">
                 <span
                   style={{
                     width: 8,
@@ -117,9 +174,19 @@ export default function AllocationWidget({ loading, holdings }) {
                     background: SLICE_COLORS[i % SLICE_COLORS.length],
                   }}
                 />
-                <span className="font-mono text-[11px] text-[#10b981] w-10">{d.ticker}</span>
-                <span className="font-mono text-[11px] text-[#e6edf3] flex-1 text-right">{d.pct.toFixed(1)}%</span>
-                <span className="font-mono text-[10px] text-[#7d8590] w-14 text-right">{fmt(d.value)}</span>
+                <span
+                  className="font-mono text-[11px] text-[#10b981] truncate"
+                  style={{ minWidth: 0, maxWidth: 60 }}
+                  title={d.ticker}
+                >
+                  {d.ticker}
+                </span>
+                <span className="font-mono text-[11px] text-[#e6edf3] flex-1 text-right">
+                  {d.pct.toFixed(1)}%
+                </span>
+                <span className="font-mono text-[10px] text-[#7d8590] w-14 text-right">
+                  {fmt(d.value)}
+                </span>
               </div>
             ))}
           </div>

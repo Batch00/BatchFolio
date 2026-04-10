@@ -17,19 +17,17 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
     ? holdings.filter(
         (h) =>
           h.ticker.includes(search.toUpperCase()) ||
-          (h.name || '').toLowerCase().includes(search.toLowerCase()),
+          (h.name || '').toLowerCase().includes(search.toLowerCase()) ||
+          (h.description || '').toLowerCase().includes(search.toLowerCase()),
       )
     : holdings
 
   const headers = [
-    { label: 'Ticker', align: 'text-left', width: 'w-[52px]' },
-    { label: 'Name', align: 'text-left', width: 'flex-1' },
+    { label: 'Ticker / Name', align: 'text-left', width: 'flex-1 min-w-[80px]' },
     { label: '', align: '', width: 'w-[60px]' },
     { label: 'Shares', align: 'text-right', width: 'w-[60px]' },
-    { label: 'Avg Cost', align: 'text-right', width: 'w-[80px]' },
-    { label: 'Price', align: 'text-right', width: 'w-[80px]' },
+    { label: 'Price', align: 'text-right', width: 'w-[72px]' },
     { label: 'Value', align: 'text-right', width: 'w-[80px]' },
-    { label: 'Gain/Loss', align: 'text-right', width: 'w-[80px]' },
     { label: 'Return', align: 'text-right', width: 'w-[70px]' },
   ]
 
@@ -56,7 +54,7 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
       {loading ? (
         <div className="space-y-2">
           {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} className="h-10" />
+            <Skeleton key={i} className="h-9" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
@@ -78,53 +76,83 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
             ))}
           </div>
 
-          <div className="divide-y divide-[#21262d]">
-            {filtered.map((h, i) => (
-              <button
-                key={h.id}
-                onClick={() => onOpenDrawer(h.ticker)}
-                className={`w-full flex items-center gap-2 py-2 text-left hover:bg-[#0d1117] transition-colors rounded ${
-                  i >= 6 && !mobileExpanded ? 'hidden sm:flex' : ''
-                }`}
-                style={{ height: 40 }}
-              >
-                <span className="font-mono text-xs text-[#10b981] w-[52px] flex-shrink-0">
-                  {h.ticker}
-                </span>
-                <span className="text-xs text-[#7d8590] flex-1 min-w-0 truncate hidden md:block">
-                  {h.name || h.ticker}
-                </span>
-                <span className="w-[60px] flex-shrink-0 hidden md:block">
-                  <Sparkline prices={sparklines[h.ticker]} positive={h.positive} />
-                </span>
-                <span className="font-mono text-xs text-[#e6edf3] w-[60px] text-right flex-shrink-0 hidden md:block">
-                  {h.shares}
-                </span>
-                <span className="font-mono text-xs text-[#e6edf3] w-[80px] text-right flex-shrink-0 hidden md:block">
-                  {fmt(h.avg_cost_basis)}
-                </span>
-                <span className="font-mono text-xs text-[#e6edf3] w-[80px] text-right flex-shrink-0 hidden md:block">
-                  {h.hasPrice === false ? '--' : fmt(h.livePrice)}
-                </span>
-                <span className="font-mono text-xs text-[#e6edf3] w-[80px] text-right flex-shrink-0 font-semibold">
-                  {h.hasPrice === false ? '--' : fmt(h.value)}
-                </span>
-                <span
-                  className={`font-mono text-xs w-[80px] text-right flex-shrink-0 hidden md:block ${
-                    h.positive ? 'text-[#34d399]' : 'text-[#f87171]'
+          {/* Scrollable list */}
+          <div
+            className="divide-y divide-[#21262d] overflow-y-auto"
+            style={{
+              maxHeight: 320,
+              scrollbarWidth: 'thin',
+              scrollbarColor: '#21262d #0d1117',
+            }}
+          >
+            {filtered.map((h, i) => {
+              // Show description as primary label when available
+              const hasDescription = h.description && h.description.trim().length > 0
+              const primaryLabel = hasDescription
+                ? h.description.length > 28
+                  ? h.description.slice(0, 28) + '...'
+                  : h.description
+                : null
+
+              return (
+                <button
+                  key={h.id}
+                  onClick={() => onOpenDrawer(h.ticker)}
+                  className={`w-full flex items-center gap-2 py-0 text-left hover:bg-[#0d1117] transition-colors rounded ${
+                    i >= 6 && !mobileExpanded ? 'hidden sm:flex' : ''
                   }`}
+                  style={{ height: 36 }}
                 >
-                  {h.gainLoss == null ? '--' : `${h.positive ? '+' : ''}${fmt(h.gainLoss)}`}
-                </span>
-                <span
-                  className={`font-mono text-xs w-[70px] text-right flex-shrink-0 font-semibold ${
-                    h.positive ? 'text-[#34d399]' : 'text-[#f87171]'
-                  }`}
-                >
-                  {h.gainPct == null ? 'N/A' : `${h.positive ? '+' : ''}${h.gainPct.toFixed(2)}%`}
-                </span>
-              </button>
-            ))}
+                  {/* Ticker / Name */}
+                  <div className="flex-1 min-w-0 flex-shrink-0">
+                    {hasDescription ? (
+                      <>
+                        <p
+                          className="text-xs text-[#e6edf3] truncate leading-tight"
+                          title={h.description}
+                        >
+                          {primaryLabel}
+                        </p>
+                        <p className="font-mono text-[#7d8590] leading-tight" style={{ fontSize: 10 }}>
+                          {h.ticker}
+                        </p>
+                      </>
+                    ) : (
+                      <span className="font-mono text-xs text-[#10b981]">{h.ticker}</span>
+                    )}
+                  </div>
+
+                  {/* Sparkline */}
+                  <span className="w-[60px] flex-shrink-0 hidden md:block">
+                    <Sparkline prices={sparklines[h.ticker]} positive={h.positive} />
+                  </span>
+
+                  {/* Shares */}
+                  <span className="font-mono text-xs text-[#e6edf3] w-[60px] text-right flex-shrink-0 hidden md:block">
+                    {h.shares}
+                  </span>
+
+                  {/* Price */}
+                  <span className="font-mono text-xs text-[#e6edf3] w-[72px] text-right flex-shrink-0 hidden md:block">
+                    {h.hasPrice === false ? '--' : fmt(h.livePrice)}
+                  </span>
+
+                  {/* Value */}
+                  <span className="font-mono text-xs text-[#e6edf3] w-[80px] text-right flex-shrink-0 font-semibold">
+                    {h.hasPrice === false ? '--' : fmt(h.value)}
+                  </span>
+
+                  {/* Return % */}
+                  <span
+                    className={`font-mono text-xs w-[70px] text-right flex-shrink-0 font-semibold ${
+                      h.positive ? 'text-[#34d399]' : 'text-[#f87171]'
+                    }`}
+                  >
+                    {h.gainPct == null ? 'N/A' : `${h.positive ? '+' : ''}${h.gainPct.toFixed(2)}%`}
+                  </span>
+                </button>
+              )
+            })}
           </div>
 
           {filtered.length > 6 && (
