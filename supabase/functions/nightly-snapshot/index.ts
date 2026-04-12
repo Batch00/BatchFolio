@@ -4,6 +4,11 @@
 // Edge Functions > nightly-snapshot > Schedule (cron: 0 0 * * *)
 // Required secrets: FINNHUB_API_KEY, APP_SUPABASE_URL,
 // SERVICE_ROLE_KEY, DEMO_USER_ID (optional - skips demo user)
+//
+// Required SQL migrations (run in Supabase SQL editor before deploying):
+// alter table batchfolio.accounts add column if not exists is_excluded boolean default false;
+// alter table batchfolio.liabilities add column if not exists simplefin_id text unique;
+// alter table batchfolio.liabilities add column if not exists is_synced boolean default false;
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -11,6 +16,14 @@ function detectAccountType(name: string): string {
   const lower = name.toLowerCase()
   if (/401k|ira|roth|retirement/.test(lower)) return 'retirement'
   return 'brokerage'
+}
+
+function isCreditCardAccount(name: string, balance?: string): boolean {
+  const lower = (name || '').toLowerCase()
+  return (
+    /credit|card|freedom|sapphire|venture|cash back|quicksilver|slate|ink|reserve/.test(lower) ||
+    parseFloat(balance ?? '0') < 0
+  )
 }
 
 async function syncSimpleFINForUser(
@@ -71,6 +84,52 @@ async function syncSimpleFINForUser(
     }[] = sfData.accounts ?? []
 
     for (const sfAcc of sfAccounts) {
+      // Route credit cards to liabilities
+      if (isCreditCardAccount(sfAcc.name, sfAcc.balance)) {
+        const balanceAbs = Math.abs(parseFloat(sfAcc.balance ?? '0') || 0)
+        try {
+          const { data: existingLiab } = await supabase
+            .from('liabilities')
+            .select('id')
+            .eq('user_id', uid)
+            .eq('simplefin_id', sfAcc.id)
+            .maybeSingle()
+
+          if (existingLiab) {
+            await supabase
+              .from('liabilities')
+              .update({ balance: balanceAbs, is_synced: true })
+              .eq('id', existingLiab.id)
+          } else {
+            await supabase.from('liabilities').insert({
+              user_id: uid,
+              name: sfAcc.name,
+              type: 'credit card',
+              balance: balanceAbs,
+              interest_rate: null,
+              simplefin_id: sfAcc.id,
+              is_synced: true,
+            })
+          }
+
+          // Delete any account row previously created for this SimpleFIN ID
+          const { data: existingCCAccount } = await supabase
+            .from('accounts')
+            .select('id')
+            .eq('user_id', uid)
+            .eq('simplefin_id', sfAcc.id)
+            .maybeSingle()
+
+          if (existingCCAccount) {
+            await supabase.from('holdings').delete().eq('account_id', existingCCAccount.id)
+            await supabase.from('accounts').delete().eq('id', existingCCAccount.id)
+          }
+        } catch {
+          // simplefin_id column may not exist yet - skip gracefully
+        }
+        continue
+      }
+
       const balanceNum = parseFloat(sfAcc.balance ?? '0') || 0
       const availableBalanceNum = parseFloat(sfAcc['available-balance'] ?? '0') || 0
       const currency = sfAcc.currency || 'USD'
@@ -226,13 +285,16 @@ Deno.serve(async () => {
 
   const finnhubKey = Deno.env.get('FINNHUB_API_KEY')!
   const today = new Date().toISOString().split('T')[0]
-  const DEMO_USER_ID = Deno.env.get('DEMO_USER_ID')
 
   // Get all users
   const { data: userList, error: userErr } = await supabase.auth.admin.listUsers()
   if (userErr || !userList) {
     return new Response(JSON.stringify({ error: 'Failed to list users' }), { status: 500 })
   }
+
+  // Find demo user ID - check by email as fallback if DEMO_USER_ID env var is not set
+  const demoUserByEmail = userList.users.find((u) => u.email === 'demo@batchfolio.app')
+  const DEMO_USER_ID = Deno.env.get('DEMO_USER_ID') || demoUserByEmail?.id || ''
 
   const users = userList.users
   const results: { uid: string; ok: boolean; skipped?: boolean; error?: string }[] = []
@@ -250,21 +312,24 @@ Deno.serve(async () => {
       // Sync SimpleFIN data first (if user has a connection)
       await syncSimpleFINForUser(supabase, uid)
 
-      // Fetch accounts for this user (include balance for synced accounts)
+      // Fetch accounts for this user (include balance for synced accounts, exclude excluded accounts)
       const { data: accounts } = await supabase
         .from('accounts')
-        .select('id, is_synced, balance')
+        .select('id, is_synced, balance, is_excluded')
         .eq('user_id', uid)
 
-      const accountList = (accounts ?? []) as { id: string; is_synced: boolean; balance: number }[]
+      const accountList = (accounts ?? []) as { id: string; is_synced: boolean; balance: number; is_excluded: boolean }[]
+
+      // Filter out excluded accounts from all calculations
+      const activeAccounts = accountList.filter((a) => !a.is_excluded)
 
       // Calculate synced assets total directly from account balances
-      const syncedAssetsTotal = accountList
+      const syncedAssetsTotal = activeAccounts
         .filter((a) => a.is_synced && a.balance > 0)
         .reduce((sum, a) => sum + a.balance, 0)
 
       // Fetch holdings for non-synced accounts (manual)
-      const manualAccountIds = accountList.filter((a) => !a.is_synced).map((a) => a.id)
+      const manualAccountIds = activeAccounts.filter((a) => !a.is_synced).map((a) => a.id)
       let manualHoldings: { ticker: string; shares: number; avg_cost_basis: number }[] = []
 
       if (manualAccountIds.length > 0) {

@@ -37,7 +37,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
       supabase.from('holdings').select('*'),
       supabase.from('watchlist').select('*').order('added_at', { ascending: false }),
       supabase.from('liabilities').select('balance'),
-      supabase.from('accounts').select('id, is_synced, balance'),
+      supabase.from('accounts').select('id, is_synced, balance, is_excluded'),
     ])
 
     if (snapshotsRes.error) {
@@ -47,7 +47,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     }
 
     const allHoldings = holdingsRes.data ?? []
-    const allAccounts = accountsRes.data ?? []
+    const allAccounts = (accountsRes.data ?? []).filter((a) => !a.is_excluded)
 
     // Build synced account id set for filtering holdings
     const syncedAccountIds = new Set(
@@ -106,7 +106,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     const latestSnap = (snapshotsRes.data ?? []).slice(-1)[0]
     const liveLiabTotal = (liabRes.data ?? []).reduce((sum, l) => sum + l.balance, 0)
 
-    // Use account balance for synced accounts, holdings * price for manual
+    // Use account balance for synced accounts, holdings * price for manual (excluded accounts already filtered)
     const syncedAssetsLive = allAccounts
       .filter((a) => a.is_synced && a.balance > 0)
       .reduce((sum, a) => sum + a.balance, 0)
@@ -179,11 +179,12 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   const latest = snapshots[snapshots.length - 1]
   const liveLiabilitiesTotal = liveLiabilities.reduce((sum, l) => sum + l.balance, 0)
 
-  // Use account balance for synced accounts, holdings * price for manual
+  // Use account balance for synced accounts, holdings * price for manual (filter excluded)
+  const activeAccounts = liveAccounts.filter((a) => !a.is_excluded)
   const syncedAccountIdSet = new Set(
-    liveAccounts.filter((a) => a.is_synced && a.balance > 0).map((a) => a.id)
+    activeAccounts.filter((a) => a.is_synced && a.balance > 0).map((a) => a.id)
   )
-  const syncedAssetsDisplay = liveAccounts
+  const syncedAssetsDisplay = activeAccounts
     .filter((a) => a.is_synced && a.balance > 0)
     .reduce((sum, a) => sum + a.balance, 0)
   const manualAssetsDisplay = holdings

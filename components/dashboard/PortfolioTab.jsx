@@ -72,9 +72,9 @@ export default function PortfolioTab({ onOpenDrawer }) {
       supabase
         .from('holdings')
         .select(
-          '*, last_synced_price, is_synced, description, cost_basis_total, currency, purchase_price, accounts(id, name, is_hidden)',
+          '*, last_synced_price, is_synced, description, cost_basis_total, currency, purchase_price, accounts(id, name, is_hidden, is_excluded)',
         ),
-      supabase.from('accounts').select('id, name, is_hidden').order('created_at'),
+      supabase.from('accounts').select('id, name, is_hidden, is_excluded').order('created_at'),
     ])
 
     if (holdRes.error) {
@@ -83,8 +83,13 @@ export default function PortfolioTab({ onOpenDrawer }) {
       return
     }
 
-    const allHoldings = holdRes.data ?? []
-    const allAccounts = (accRes.data ?? []).filter((a) => !a.is_hidden)
+    const excludedAccountIds = new Set(
+      (accRes.data ?? []).filter((a) => a.is_hidden || a.is_excluded).map((a) => a.id)
+    )
+    const allHoldings = (holdRes.data ?? []).filter(
+      (h) => !excludedAccountIds.has(h.accounts?.id ?? h.account_id)
+    )
+    const allAccounts = (accRes.data ?? []).filter((a) => !a.is_hidden && !a.is_excluded)
     setAccounts(allAccounts)
 
     const manualHoldings = allHoldings.filter((h) => !h.is_synced)

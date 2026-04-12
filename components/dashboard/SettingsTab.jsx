@@ -132,7 +132,11 @@ export default function SettingsTab({ isDemo, onDemoBlock }) {
           Bank Sync
         </p>
 
-        {loadingConn ? (
+        {isDemo ? (
+          <p className="text-xs text-[#7d8590]">
+            SimpleFIN sync is not available in demo mode.
+          </p>
+        ) : loadingConn ? (
           <div className="space-y-2">
             <div className="h-4 bg-[#21262d] rounded animate-pulse w-48" />
             <div className="h-4 bg-[#21262d] rounded animate-pulse w-64" />

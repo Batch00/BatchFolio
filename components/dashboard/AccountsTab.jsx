@@ -28,7 +28,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Trash2, Plus, ChevronDown, ChevronRight, Pencil, RefreshCw } from 'lucide-react'
+import { Trash2, Plus, ChevronDown, ChevronRight, Pencil, RefreshCw, EyeOff, Eye, GripVertical } from 'lucide-react'
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 const fmt = (v) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v ?? 0)
@@ -39,6 +42,261 @@ function fmtDate(dateStr) {
     month: 'short',
     day: 'numeric',
   })
+}
+
+function SortableAccountRow({
+  acc, holdings, prices, expanded, toggleExpand, accountTotal, fmtBalanceDate,
+  openEditAccount, deleteAccount, toggleExclude, openAddHolding, openEditHolding,
+  deleteHolding, onOpenDrawer, isDemo,
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: acc.id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  const total = accountTotal(acc)
+  const holdList = holdings[acc.id] ?? []
+  const isExpanded = expanded[acc.id]
+  const isExcluded = acc.is_excluded ?? false
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="bg-[#161b22] border border-[#21262d] rounded-md overflow-hidden"
+    >
+      <div className="flex items-center px-3 py-3" style={{ opacity: isExcluded ? 0.5 : 1 }}>
+        {/* Drag handle */}
+        <button
+          {...attributes}
+          {...listeners}
+          className="flex-shrink-0 mr-2 text-[#3d4451] hover:text-[#7d8590] transition-colors"
+          style={{ cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+          tabIndex={-1}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+
+        <button
+          onClick={() => toggleExpand(acc.id)}
+          className="flex-1 flex items-center gap-2 text-left min-w-0"
+        >
+          {isExpanded ? (
+            <ChevronDown className="h-3.5 w-3.5 text-[#7d8590] flex-shrink-0" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-[#7d8590] flex-shrink-0" />
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm text-[#e6edf3] truncate">{acc.name}</p>
+              {isExcluded ? (
+                <span
+                  style={{
+                    background: 'rgba(125,133,144,0.1)',
+                    color: '#7d8590',
+                    fontSize: 9,
+                    letterSpacing: '0.06em',
+                    padding: '1px 5px',
+                    borderRadius: 3,
+                    fontFamily: 'monospace',
+                    textTransform: 'uppercase',
+                    flexShrink: 0,
+                  }}
+                >
+                  EXCLUDED
+                </span>
+              ) : acc.is_synced ? (
+                <span
+                  style={{
+                    background: 'rgba(16,185,129,0.1)',
+                    color: '#10b981',
+                    fontSize: 9,
+                    letterSpacing: '0.06em',
+                    padding: '1px 5px',
+                    borderRadius: 3,
+                    fontFamily: 'monospace',
+                    textTransform: 'uppercase',
+                    flexShrink: 0,
+                  }}
+                >
+                  SYNCED
+                </span>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-xs text-[#7d8590]">{acc.provider}</span>
+              <Badge variant="secondary" className="text-xs py-0 h-4">
+                {acc.type}
+              </Badge>
+            </div>
+          </div>
+        </button>
+
+        <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+          <div className="text-right mr-2">
+            <span className="font-mono text-sm text-[#e6edf3]">{fmt(total)}</span>
+            {acc.is_synced && acc.last_balance_date && (
+              <p style={{ fontSize: 10, color: '#7d8590' }}>
+                Updated {fmtBalanceDate(acc.last_balance_date)}
+              </p>
+            )}
+          </div>
+          {/* Exclude toggle - only for synced accounts */}
+          {acc.is_synced && (
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleExclude(acc) }}
+              title={isExcluded ? 'Include in portfolio' : 'Exclude from portfolio'}
+              className="text-[#7d8590] hover:text-[#e6edf3] transition-colors"
+              style={{ minWidth: 36, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              {isExcluded
+                ? <Eye className="h-3.5 w-3.5" />
+                : <EyeOff className="h-3.5 w-3.5" />
+              }
+            </button>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); openEditAccount(acc) }}
+            className="text-[#7d8590] hover:text-[#10b981] transition-colors"
+            style={{ minWidth: 36, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Pencil className="h-[13px] w-[13px]" />
+          </button>
+          {!acc.is_synced && (
+            <button
+              onClick={(e) => { e.stopPropagation(); deleteAccount(acc.id) }}
+              className="text-[#7d8590] hover:text-[#f87171] transition-colors"
+              style={{ minWidth: 36, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="border-t border-[#21262d] bg-[#0d1117]">
+          {!isDemo && (
+            <div className="flex justify-end px-4 py-2">
+              <button
+                onClick={() => openAddHolding(acc.id)}
+                className="text-xs text-[#10b981] hover:text-[#34d399] transition-colors flex items-center gap-1"
+              >
+                <Plus className="h-3 w-3" />
+                Add Holding
+              </button>
+            </div>
+          )}
+          {holdList.length === 0 ? (
+            <p className="text-xs text-[#7d8590] px-4 pb-3">No holdings in this account.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table style={{ tableLayout: 'fixed', width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ fontSize: 10, color: '#7d8590', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <th style={{ width: 70, padding: '4px 8px', textAlign: 'left', fontWeight: 500 }}>Ticker</th>
+                    <th style={{ width: 180, padding: '4px 8px', textAlign: 'left', fontWeight: 500 }}>Description</th>
+                    <th style={{ width: 80, padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">Shares</th>
+                    <th style={{ width: 90, padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">Avg Cost</th>
+                    <th style={{ width: 90, padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Price</th>
+                    <th style={{ width: 100, padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Value</th>
+                    <th style={{ width: 80, padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Gain%</th>
+                    <th style={{ width: 60, padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {holdList.map((h) => {
+                    const isCash = h.ticker === 'CASH'
+                    const livePrice = isCash ? h.avg_cost_basis : (prices[h.ticker]?.price ?? 0)
+                    const value = isCash ? h.avg_cost_basis : h.shares * livePrice
+                    const costBasis = isCash ? h.avg_cost_basis : h.shares * h.avg_cost_basis
+                    const gainLoss = isCash ? 0 : value - costBasis
+                    const gainPct = isCash ? 0 : costBasis > 0 ? (gainLoss / costBasis) * 100 : 0
+                    const positive = gainLoss >= 0
+                    const desc = h.description || h.ticker
+                    return (
+                      <tr key={h.id} style={{ height: 36, borderBottom: '1px solid #21262d' }}>
+                        <td style={{ padding: '6px 8px', width: 70 }}>
+                          <div className="flex items-center gap-1">
+                            {isCash ? (
+                              <span className="font-mono text-xs text-[#7d8590]">CASH</span>
+                            ) : (
+                              <button
+                                onClick={() => onOpenDrawer(h.ticker)}
+                                className="font-mono text-xs text-[#10b981] hover:text-[#34d399] transition-colors"
+                              >
+                                {h.ticker}
+                              </button>
+                            )}
+                            {h.is_synced && (
+                              <RefreshCw style={{ width: 9, height: 9, color: 'rgba(16,185,129,0.5)', flexShrink: 0 }} />
+                            )}
+                          </div>
+                        </td>
+                        <td style={{ padding: '6px 8px', width: 180, overflow: 'hidden' }}>
+                          <p
+                            style={{ fontSize: 11, color: '#7d8590', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            title={desc}
+                          >
+                            {desc.length > 22 ? desc.slice(0, 22) + '...' : desc}
+                          </p>
+                        </td>
+                        <td style={{ padding: '6px 8px', width: 80, textAlign: 'right' }} className="hidden md:table-cell">
+                          <span className="font-mono text-xs text-[#e6edf3]">{isCash ? '-' : h.shares}</span>
+                        </td>
+                        <td style={{ padding: '6px 8px', width: 90, textAlign: 'right' }} className="hidden md:table-cell">
+                          <span className="font-mono text-xs text-[#e6edf3]">{isCash ? '-' : fmt(h.avg_cost_basis > 0 ? h.avg_cost_basis : 0)}</span>
+                        </td>
+                        <td style={{ padding: '6px 8px', width: 90, textAlign: 'right' }}>
+                          <span className="font-mono text-xs text-[#e6edf3]">{isCash ? '-' : fmt(livePrice)}</span>
+                        </td>
+                        <td style={{ padding: '6px 8px', width: 100, textAlign: 'right' }}>
+                          <span className="font-mono text-xs text-[#e6edf3]">{fmt(value)}</span>
+                        </td>
+                        <td style={{ padding: '6px 8px', width: 80, textAlign: 'right' }}>
+                          {isCash ? (
+                            <span className="font-mono text-xs text-[#7d8590]">-</span>
+                          ) : (
+                            <span className={`font-mono text-xs ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}>
+                              {positive ? '+' : ''}{gainPct.toFixed(2)}%
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: '6px 8px', width: 60, textAlign: 'right' }}>
+                          <div className="flex items-center justify-end">
+                            {!h.is_synced && (
+                              <button
+                                onClick={() => openEditHolding(h)}
+                                className="text-[#7d8590] hover:text-[#10b981] transition-colors"
+                                style={{ minWidth: 28, minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              >
+                                <Pencil className="h-[12px] w-[12px]" />
+                              </button>
+                            )}
+                            {!h.is_synced && (
+                              <button
+                                onClick={() => deleteHolding(h.id)}
+                                className="text-[#7d8590] hover:text-[#f87171] transition-colors"
+                                style={{ minWidth: 28, minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
@@ -108,6 +366,7 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
   const [editLiabRate, setEditLiabRate] = useState('')
   const [editLiabSaving, setEditLiabSaving] = useState(false)
   const [editLiabError, setEditLiabError] = useState(null)
+  const [editLiabIsSynced, setEditLiabIsSynced] = useState(false)
 
   // Toast state
   const [toast, setToast] = useState(null)
@@ -122,7 +381,7 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     setError(null)
 
     const [accsRes, holdingsRes, liabRes, snapRes] = await Promise.all([
-      supabase.from('accounts').select('*, balance, available_balance, currency, last_balance_date').order('created_at', { ascending: false }),
+      supabase.from('accounts').select('*, balance, available_balance, currency, last_balance_date, is_excluded, sort_order').order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
       supabase.from('holdings').select('*, last_synced_price, is_synced, description, cost_basis_total, currency, purchase_price').order('ticker'),
       supabase.from('liabilities').select('*').order('created_at', { ascending: false }),
       supabase
@@ -386,6 +645,7 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     setEditLiabType(l.type)
     setEditLiabBalance(String(l.balance))
     setEditLiabRate(l.interest_rate != null ? String(l.interest_rate) : '')
+    setEditLiabIsSynced(l.is_synced ?? false)
     setEditLiabError(null)
     setEditLiabDialog(true)
   }
@@ -395,14 +655,17 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     if (isDemo) { onDemoBlock?.(); return }
     setEditLiabSaving(true)
     setEditLiabError(null)
+    const updatePayload = editLiabIsSynced
+      ? { name: editLiabName.trim() }
+      : {
+          name: editLiabName.trim(),
+          type: editLiabType,
+          balance: parseFloat(editLiabBalance),
+          interest_rate: editLiabRate ? parseFloat(editLiabRate) : null,
+        }
     const { error: err } = await supabase
       .from('liabilities')
-      .update({
-        name: editLiabName.trim(),
-        type: editLiabType,
-        balance: parseFloat(editLiabBalance),
-        interest_rate: editLiabRate ? parseFloat(editLiabRate) : null,
-      })
+      .update(updatePayload)
       .eq('id', editLiabId)
     if (err) {
       setEditLiabError(err.message)
@@ -417,6 +680,30 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
   function toggleExpand(id) {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }))
   }
+
+  async function toggleExclude(acc) {
+    if (isDemo) { onDemoBlock?.(); return }
+    const newVal = !acc.is_excluded
+    setAccounts((prev) => prev.map((a) => a.id === acc.id ? { ...a, is_excluded: newVal } : a))
+    await supabase.from('accounts').update({ is_excluded: newVal }).eq('id', acc.id)
+  }
+
+  async function handleDragEnd(event) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = accounts.findIndex((a) => a.id === active.id)
+    const newIndex = accounts.findIndex((a) => a.id === over.id)
+    const reordered = arrayMove(accounts, oldIndex, newIndex)
+    setAccounts(reordered)
+    for (let i = 0; i < reordered.length; i++) {
+      await supabase.from('accounts').update({ sort_order: i }).eq('id', reordered[i].id)
+    }
+  }
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
   const liabTotal = liabilities.reduce((s, l) => s + l.balance, 0)
 
@@ -471,219 +758,32 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
         ) : accounts.length === 0 ? (
           <p className="text-sm text-[#7d8590]">No accounts yet.</p>
         ) : (
-          <div className="space-y-3">
-            {accounts.map((acc) => {
-              const total = accountTotal(acc)
-              const holdList = holdings[acc.id] ?? []
-              const isExpanded = expanded[acc.id]
-
-              return (
-                <div
-                  key={acc.id}
-                  className="bg-[#161b22] border border-[#21262d] rounded-md overflow-hidden"
-                >
-                  <div className="flex items-center px-4 py-3">
-                    <button
-                      onClick={() => toggleExpand(acc.id)}
-                      className="flex-1 flex items-center gap-2 text-left min-w-0"
-                    >
-                      {isExpanded ? (
-                        <ChevronDown className="h-3.5 w-3.5 text-[#7d8590] flex-shrink-0" />
-                      ) : (
-                        <ChevronRight className="h-3.5 w-3.5 text-[#7d8590] flex-shrink-0" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm text-[#e6edf3] truncate">{acc.name}</p>
-                          {acc.is_synced && (
-                            <span
-                              style={{
-                                background: 'rgba(16,185,129,0.1)',
-                                color: '#10b981',
-                                fontSize: 9,
-                                letterSpacing: '0.06em',
-                                padding: '1px 5px',
-                                borderRadius: 3,
-                                fontFamily: 'monospace',
-                                textTransform: 'uppercase',
-                                flexShrink: 0,
-                              }}
-                            >
-                              SYNCED
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs text-[#7d8590]">{acc.provider}</span>
-                          <Badge variant="secondary" className="text-xs py-0 h-4">
-                            {acc.type}
-                          </Badge>
-                        </div>
-                      </div>
-                    </button>
-                    <div className="flex items-center gap-3 ml-2 flex-shrink-0">
-                      <div className="text-right">
-                        <span className="font-mono text-sm text-[#e6edf3]">{fmt(total)}</span>
-                        {acc.is_synced && acc.last_balance_date && (
-                          <p style={{ fontSize: 10, color: '#7d8590' }}>
-                            Updated {fmtBalanceDate(acc.last_balance_date)}
-                          </p>
-                        )}
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          openEditAccount(acc)
-                        }}
-                        className="text-[#7d8590] hover:text-[#10b981] transition-colors"
-                        style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      >
-                        <Pencil className="h-[13px] w-[13px]" />
-                      </button>
-                      {!acc.is_synced && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            deleteAccount(acc.id)
-                          }}
-                          className="text-[#7d8590] hover:text-[#f87171] transition-colors"
-                          style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="border-t border-[#21262d] bg-[#0d1117]">
-                      {!isDemo && (
-                        <div className="flex justify-end px-4 py-2">
-                          <button
-                            onClick={() => openAddHolding(acc.id)}
-                            className="text-xs text-[#10b981] hover:text-[#34d399] transition-colors flex items-center gap-1"
-                          >
-                            <Plus className="h-3 w-3" />
-                            Add Holding
-                          </button>
-                        </div>
-                      )}
-                      {holdList.length === 0 ? (
-                        <p className="text-xs text-[#7d8590] px-4 pb-3">
-                          No holdings in this account.
-                        </p>
-                      ) : (
-                        <div className="px-4 pb-3 overflow-x-auto">
-                          <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto] gap-x-4 gap-y-0 text-[10px] text-[#7d8590] uppercase tracking-wider mb-1">
-                            <span>Ticker</span>
-                            <span />
-                            <span className="text-right hidden md:block">Shares</span>
-                            <span className="text-right hidden md:block">Avg Cost</span>
-                            <span className="text-right">Live Price</span>
-                            <span className="text-right">Value</span>
-                            <span className="text-right">Gain%</span>
-                          </div>
-                          <div className="space-y-0.5">
-                            {holdList.map((h) => {
-                              const isCash = h.ticker === 'CASH'
-                              const livePrice = isCash
-                                ? h.avg_cost_basis
-                                : (prices[h.ticker]?.price ?? 0)
-                              const value = isCash ? h.avg_cost_basis : h.shares * livePrice
-                              const costBasis = isCash ? h.avg_cost_basis : h.shares * h.avg_cost_basis
-                              const gainLoss = isCash ? 0 : value - costBasis
-                              const gainPct = isCash ? 0 : costBasis > 0 ? (gainLoss / costBasis) * 100 : 0
-                              const positive = gainLoss >= 0
-                              return (
-                                <div
-                                  key={h.id}
-                                  className="grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto] gap-x-4 items-center py-1.5 border-b border-[#21262d] last:border-0"
-                                >
-                                  <div className="flex items-center gap-1 w-14">
-                                    {isCash ? (
-                                      <span className="font-mono text-xs text-[#7d8590]">Cash</span>
-                                    ) : (
-                                      <button
-                                        onClick={() => onOpenDrawer(h.ticker)}
-                                        className="font-mono text-xs text-[#10b981] hover:text-[#34d399] transition-colors"
-                                      >
-                                        {h.ticker}
-                                      </button>
-                                    )}
-                                    {h.is_synced && (
-                                      <RefreshCw
-                                        className="flex-shrink-0"
-                                        style={{ width: 10, height: 10, color: 'rgba(16,185,129,0.5)' }}
-                                      />
-                                    )}
-                                  </div>
-                                  <div className="min-w-0">
-                                    {h.description && (
-                                      <p
-                                        className="truncate"
-                                        style={{ fontSize: 10, color: '#7d8590', maxWidth: 140 }}
-                                        title={h.description}
-                                      >
-                                        {h.description.length > 35
-                                          ? h.description.slice(0, 35) + '...'
-                                          : h.description}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <span className="font-mono text-xs text-[#e6edf3] text-right hidden md:block">
-                                    {isCash ? '-' : h.shares}
-                                  </span>
-                                  <span className="font-mono text-xs text-[#e6edf3] text-right hidden md:block">
-                                    {isCash ? '-' : fmt(h.avg_cost_basis > 0 ? h.avg_cost_basis : 0)}
-                                  </span>
-                                  <span className="font-mono text-xs text-[#e6edf3] text-right">
-                                    {isCash ? '-' : fmt(livePrice)}
-                                  </span>
-                                  <span className="font-mono text-xs text-[#e6edf3] text-right">
-                                    {fmt(value)}
-                                  </span>
-                                  <div className="flex items-center gap-2 justify-end">
-                                    {isCash ? (
-                                      <span className="font-mono text-xs text-[#7d8590]">-</span>
-                                    ) : (
-                                      <span
-                                        className={`font-mono text-xs ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}
-                                      >
-                                        {positive ? '+' : ''}
-                                        {gainPct.toFixed(2)}%
-                                      </span>
-                                    )}
-                                    {!h.is_synced && (
-                                      <button
-                                        onClick={() => openEditHolding(h)}
-                                        className="text-[#7d8590] hover:text-[#10b981] transition-colors"
-                                        style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                      >
-                                        <Pencil className="h-[13px] w-[13px]" />
-                                      </button>
-                                    )}
-                                    {!h.is_synced && (
-                                      <button
-                                        onClick={() => deleteHolding(h.id)}
-                                        className="text-[#7d8590] hover:text-[#f87171] transition-colors"
-                                        style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                      >
-                                        <Trash2 className="h-3 w-3" />
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={accounts.map((a) => a.id)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-3">
+                {accounts.map((acc) => (
+                  <SortableAccountRow
+                    key={acc.id}
+                    acc={acc}
+                    holdings={holdings}
+                    prices={prices}
+                    expanded={expanded}
+                    toggleExpand={toggleExpand}
+                    accountTotal={accountTotal}
+                    fmtBalanceDate={fmtBalanceDate}
+                    openEditAccount={openEditAccount}
+                    deleteAccount={deleteAccount}
+                    toggleExclude={toggleExclude}
+                    openAddHolding={openAddHolding}
+                    openEditHolding={openEditHolding}
+                    deleteHolding={deleteHolding}
+                    onOpenDrawer={onOpenDrawer}
+                    isDemo={isDemo}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
       </div>
 
@@ -785,15 +885,15 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                             {monthlyInterest != null ? fmt(monthlyInterest) : '-'}
                           </TableCell>
                           <TableCell className="text-right">
-                            {!l.is_synced && (
-                              <div className="flex items-center justify-end gap-1">
-                                <button
-                                  onClick={() => openEditLiability(l)}
-                                  className="text-[#7d8590] hover:text-[#10b981] transition-colors"
-                                  style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                >
-                                  <Pencil className="h-[13px] w-[13px]" />
-                                </button>
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => openEditLiability(l)}
+                                className="text-[#7d8590] hover:text-[#10b981] transition-colors"
+                                style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              >
+                                <Pencil className="h-[13px] w-[13px]" />
+                              </button>
+                              {!l.is_synced && (
                                 <button
                                   onClick={() => deleteLiability(l.id)}
                                   className="text-[#7d8590] hover:text-[#f87171] transition-colors"
@@ -801,8 +901,8 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </button>
-                              </div>
-                            )}
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       )
@@ -1197,44 +1297,52 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                 required
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Type</Label>
-              <Select value={editLiabType} onValueChange={setEditLiabType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="loan">Loan</SelectItem>
-                  <SelectItem value="mortgage">Mortgage</SelectItem>
-                  <SelectItem value="credit card">Credit Card</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Balance</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={editLiabBalance}
-                onChange={(e) => setEditLiabBalance(e.target.value)}
-                className="font-mono"
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Interest Rate (%) - optional</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                value={editLiabRate}
-                onChange={(e) => setEditLiabRate(e.target.value)}
-                className="font-mono"
-              />
-            </div>
+            {editLiabIsSynced ? (
+              <p style={{ fontSize: 11, color: '#7d8590' }}>
+                Balance and type are managed by SimpleFIN sync
+              </p>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <Label>Type</Label>
+                  <Select value={editLiabType} onValueChange={setEditLiabType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="loan">Loan</SelectItem>
+                      <SelectItem value="mortgage">Mortgage</SelectItem>
+                      <SelectItem value="credit card">Credit Card</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Balance</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editLiabBalance}
+                    onChange={(e) => setEditLiabBalance(e.target.value)}
+                    className="font-mono"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Interest Rate (%) - optional</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={editLiabRate}
+                    onChange={(e) => setEditLiabRate(e.target.value)}
+                    className="font-mono"
+                  />
+                </div>
+              </>
+            )}
             {editLiabError && <p className="text-sm text-[#f87171]">{editLiabError}</p>}
             <div className="flex gap-2">
               <Button

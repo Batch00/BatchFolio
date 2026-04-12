@@ -114,6 +114,23 @@ export async function POST() {
               is_synced: true,
             })
           }
+
+          // Delete any account row that was previously created for this SimpleFIN ID
+          const { data: existingCCAccount } = await supabase
+            .from('accounts')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('simplefin_id', sfAcc.id)
+            .maybeSingle()
+
+          if (existingCCAccount) {
+            await supabase.from('holdings')
+              .delete()
+              .eq('account_id', existingCCAccount.id)
+            await supabase.from('accounts')
+              .delete()
+              .eq('id', existingCCAccount.id)
+          }
         } catch {
           // simplefin_id column may not exist yet - skip gracefully
         }
