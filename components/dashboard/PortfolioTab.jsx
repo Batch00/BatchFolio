@@ -42,14 +42,31 @@ function SortIcon({ dir }) {
   )
 }
 
+const CLASS_COLORS = {
+  'Cash': '#6b7280',
+  'Fixed Income': '#3b82f6',
+  'Real Estate': '#f59e0b',
+  'International': '#8b5cf6',
+  'US Large Cap': '#10b981',
+  'US Mid/Small Cap': '#34d399',
+  'Balanced': '#06b6d4',
+  'Sector': '#ef4444',
+  'US Equities': '#065f46',
+}
+
 function getAssetClass(ticker, description) {
   const t = (ticker || '').toLowerCase()
   const d = (description || '').toLowerCase()
+  const td = t + ' ' + d
   if (t === 'cash') return 'Cash'
-  if (/bond|fixed|income|treasury|bnd|vbtlx|agg/.test(t + d)) return 'Fixed Income'
-  if (/reit|real estate|property|vnq/.test(t + d)) return 'Real Estate'
-  if (/international|intl|foreign|vxus|vtiax|eafe/.test(t + d)) return 'International'
-  return 'Equities'
+  if (/bond|fixed income|income fund|treasury|government|corporate bond|bnd|agg|lqd|vbtlx|tlt|shy/.test(td)) return 'Fixed Income'
+  if (/reit|real estate|property|vnq|schh/.test(td)) return 'Real Estate'
+  if (/international|intl|foreign|emerging market|global|world|eafe|vxus|vtiax|veu|efa|vwo|fspsx|dldrx/.test(td)) return 'International'
+  if (/large cap|s&p 500|500 index|large-cap|sp500|fxaix|voo|spy|ivv|schx|seegx|pcbix|astlv/.test(td)) return 'US Large Cap'
+  if (/small cap|mid cap|small-cap|mid-cap|extended market|completion|iwm|vb|vxf|vimax|mvckx/.test(td)) return 'US Mid/Small Cap'
+  if (/balanced|target|allocation|moderate|conservative|growth|prwcx|vwenx/.test(td)) return 'Balanced'
+  if (/sector|energy|technology|health|financial|utility|xle|pxe|igv|dgro|dfcex|dffvx/.test(td)) return 'Sector'
+  return 'US Equities'
 }
 
 export default function PortfolioTab({ onOpenDrawer }) {
@@ -242,7 +259,9 @@ export default function PortfolioTab({ onOpenDrawer }) {
   // Allocation data - by ticker or by asset class
   const allocationSource = sorted.filter((r) => r.value > 0)
   let allocationData
+  let allocUseClassColors = false
   if (allocView === 'class') {
+    allocUseClassColors = true
     const classMap = {}
     allocationSource.forEach((r) => {
       const cls = getAssetClass(r.ticker, r.description)
@@ -256,11 +275,17 @@ export default function PortfolioTab({ onOpenDrawer }) {
       }))
       .sort((a, b) => b.value - a.value)
   } else {
-    allocationData = allocationSource.slice(0, 8).map((r) => ({
-      ticker: r.ticker,
-      value: r.value,
-      pct: totalValue > 0 ? (r.value / totalValue) * 100 : 0,
-    }))
+    allocationData = allocationSource.slice(0, 8).map((r) => {
+      // Use displayName for CASH, description for fund names, ticker as fallback
+      const label = r.displayName
+        || (r.description ? r.description.substring(0, 20) : null)
+        || r.ticker
+      return {
+        ticker: label,
+        value: r.value,
+        pct: totalValue > 0 ? (r.value / totalValue) * 100 : 0,
+      }
+    })
   }
 
   return (
@@ -384,8 +409,8 @@ export default function PortfolioTab({ onOpenDrawer }) {
                   dataKey="value"
                   strokeWidth={0}
                 >
-                  {allocationData.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  {allocationData.map((d, i) => (
+                    <Cell key={i} fill={allocUseClassColors ? (CLASS_COLORS[d.ticker] ?? COLORS[i % COLORS.length]) : COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip
@@ -403,11 +428,13 @@ export default function PortfolioTab({ onOpenDrawer }) {
               </PieChart>
             </ResponsiveContainer>
             <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
-              {allocationData.map((d, i) => (
+              {allocationData.map((d, i) => {
+                const color = allocUseClassColors ? (CLASS_COLORS[d.ticker] ?? COLORS[i % COLORS.length]) : COLORS[i % COLORS.length]
+                return (
                 <div key={d.ticker} className="flex items-center gap-2">
                   <span
                     className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ background: COLORS[i % COLORS.length] }}
+                    style={{ background: color }}
                   />
                   <span
                     className="font-mono text-xs text-[#10b981] w-12 truncate"
@@ -417,7 +444,8 @@ export default function PortfolioTab({ onOpenDrawer }) {
                   </span>
                   <span className="font-mono text-xs text-[#7d8590]">{d.pct.toFixed(1)}%</span>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>

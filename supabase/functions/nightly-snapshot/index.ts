@@ -93,10 +93,12 @@ async function syncSimpleFINForUser(
     }[] = sfData.accounts ?? []
 
     for (const sfAcc of sfAccounts) {
-      // Route credit cards to liabilities
+      // Route credit cards to liabilities + sync transactions via shadow account
       if (isCreditCardAccount(sfAcc.name, sfAcc.balance)) {
         const balanceAbs = Math.abs(parseFloat(sfAcc.balance ?? '0') || 0)
         try {
+          // 1. Upsert liability
+          let liabilityId: string | null = null
           const { data: existingLiab } = await supabase
             .from('liabilities')
             .select('id')
@@ -109,8 +111,9 @@ async function syncSimpleFINForUser(
               .from('liabilities')
               .update({ balance: balanceAbs, is_synced: true })
               .eq('id', existingLiab.id)
+            liabilityId = existingLiab.id
           } else {
-            await supabase.from('liabilities').insert({
+            const { data: newLiab } = await supabase.from('liabilities').insert({
               user_id: uid,
               name: sfAcc.name,
               type: 'credit card',
@@ -118,10 +121,11 @@ async function syncSimpleFINForUser(
               interest_rate: null,
               simplefin_id: sfAcc.id,
               is_synced: true,
-            })
+            }).select('id').single()
+            liabilityId = newLiab?.id ?? null
           }
 
-          // Delete any account row previously created for this SimpleFIN ID
+          // 2. Delete any old non-shadow account for this SimpleFIN ID
           const { data: existingCCAccount } = await supabase
             .from('accounts')
             .select('id')
@@ -132,6 +136,56 @@ async function syncSimpleFINForUser(
           if (existingCCAccount) {
             await supabase.from('holdings').delete().eq('account_id', existingCCAccount.id)
             await supabase.from('accounts').delete().eq('id', existingCCAccount.id)
+          }
+
+          // 3. Upsert hidden shadow account to hold transactions
+          if (liabilityId) {
+            const { data: shadowAcc } = await supabase
+              .from('accounts')
+              .upsert(
+                {
+                  user_id: uid,
+                  name: sfAcc.name + ' (Transactions)',
+                  provider: sfAcc.org?.name || 'SimpleFIN',
+                  provider_url: sfAcc.org?.url || null,
+                  type: 'bank',
+                  simplefin_id: sfAcc.id + '-txn',
+                  is_synced: true,
+                  is_hidden: true,
+                  balance: 0,
+                },
+                { onConflict: 'user_id,simplefin_id' },
+              )
+              .select('id')
+              .maybeSingle()
+
+            // 4. Sync credit card transactions
+            if (shadowAcc?.id) {
+              const sfTransactions = sfAcc.transactions ?? []
+              for (const tx of sfTransactions) {
+                if (!tx.id) continue
+                const amount = parseFloat(tx.amount ?? '0')
+                if (amount === 0 || isNaN(amount)) continue
+
+                await supabase.from('transactions').upsert(
+                  {
+                    account_id: shadowAcc.id,
+                    liability_id: liabilityId,
+                    user_id: uid,
+                    simplefin_id: tx.id,
+                    posted_at: tx.posted ? new Date(tx.posted * 1000).toISOString() : null,
+                    transacted_at: tx.transacted_at ? new Date(tx.transacted_at * 1000).toISOString() : null,
+                    amount,
+                    description: tx.description || null,
+                    payee: tx.payee || null,
+                    memo: tx.memo || null,
+                    pending: tx.pending || false,
+                    tx_type: amount > 0 ? 'credit' : 'debit',
+                  },
+                  { onConflict: 'simplefin_id' },
+                )
+              }
+            }
           }
         } catch {
           // simplefin_id column may not exist yet - skip gracefully
@@ -180,6 +234,7 @@ async function syncSimpleFINForUser(
             user_id: uid,
             name: sfAcc.name,
             provider: sfAcc.org?.name ?? 'SimpleFIN',
+            provider_url: sfAcc.org?.url || null,
             type: newType,
             simplefin_id: sfAcc.id,
             is_synced: true,
@@ -273,6 +328,7 @@ async function syncSimpleFINForUser(
             payee: tx.payee || null,
             memo: tx.memo || null,
             pending: tx.pending || false,
+            tx_type: amount > 0 ? 'credit' : 'debit',
           },
           { onConflict: 'simplefin_id' },
         )

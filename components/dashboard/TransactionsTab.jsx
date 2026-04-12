@@ -48,20 +48,32 @@ const CATEGORY_COLORS = {
   Shopping: '#3b82f6',
   Recreation: '#8b5cf6',
   Income: '#10b981',
+  Investment: '#06b6d4',
+  Payroll: '#84cc16',
+  Bills: '#ef4444',
+  Cash: '#6b7280',
   Other: '#7d8590',
 }
 
-const ALL_CATEGORIES = ['Gas', 'Groceries', 'Dining', 'Shopping', 'Recreation', 'Income', 'Other']
+const ALL_CATEGORIES = [
+  'Gas', 'Groceries', 'Dining', 'Shopping', 'Recreation',
+  'Income', 'Investment', 'Payroll', 'Bills', 'Cash', 'Other',
+]
 
 function getCategory(payee, description) {
   const text = ((payee || '') + ' ' + (description || '')).toLowerCase()
-  if (/gas|fuel|shell|bp|exxon|chevron/.test(text)) return 'Gas'
-  if (/grocery|walmart|target|kroger|whole foods/.test(text)) return 'Groceries'
-  if (/restaurant|cafe|coffee|mcdonald|starbucks|doordash|grubhub|uber eats/.test(text))
-    return 'Dining'
-  if (/amazon|ebay|shop|etsy/.test(text)) return 'Shopping'
-  if (/golf|gym|sport|fitness|planet fitness/.test(text)) return 'Recreation'
-  if (/dividend|interest|deposit|payroll|salary/.test(text)) return 'Income'
+  // Investment/income patterns first — catches 401k/retirement transactions before spending rules
+  if (/dividend|interest earned|capital gain|distribution|reinvest/.test(text)) return 'Income'
+  if (/bought|sold|purchase|redemption|exchange|transfer|rollover|contribution|withdrawal|you bought|you sold/.test(text)) return 'Investment'
+  if (/payroll|salary|direct deposit|paycheck/.test(text)) return 'Payroll'
+  // Spending categories
+  if (/gas|fuel|shell|bp|exxon|chevron|kwik trip|casey/.test(text)) return 'Gas'
+  if (/grocery|walmart|target|kroger|whole foods|aldi|woodman|meijer/.test(text)) return 'Groceries'
+  if (/restaurant|cafe|coffee|mcdonald|starbucks|chipotle|pizza|burger|taco|subway/.test(text)) return 'Dining'
+  if (/amazon|ebay|etsy|shop|store|mall/.test(text)) return 'Shopping'
+  if (/golf|gym|sport|fitness|recreation|country club|creek/.test(text)) return 'Recreation'
+  if (/electric|gas bill|water|utility|internet|phone|insurance/.test(text)) return 'Bills'
+  if (/atm|cash|withdrawal/.test(text)) return 'Cash'
   return 'Other'
 }
 
@@ -99,20 +111,21 @@ export default function TransactionsTab() {
 
     // Determine if the selected filter is a liability (credit card)
     const isLiabilityFilter = selectedAccount.startsWith('liability:')
+    const liabilityId = isLiabilityFilter ? selectedAccount.replace('liability:', '') : null
 
     const [accsRes, liabsRes, txRes] = await Promise.all([
-      supabase.from('accounts').select('id, name').order('created_at', { ascending: false }),
+      supabase.from('accounts').select('id, name, is_hidden').order('created_at', { ascending: false }),
       supabase.from('liabilities').select('id, name, simplefin_id').eq('user_id', user.id).not('simplefin_id', 'is', null).order('name'),
       (() => {
         let q = supabase
           .from('transactions')
-          .select('*, accounts(name)')
+          .select('*, accounts(name), liabilities(name)')
           .eq('user_id', user.id)
           .gte('posted_at', fromDate.toISOString())
           .order('posted_at', { ascending: false })
-        // Credit card transactions need a liability_id column migration to filter properly
-        // For now, only filter by account_id for regular accounts
-        if (selectedAccount !== 'all' && !isLiabilityFilter) {
+        if (liabilityId) {
+          q = q.eq('liability_id', liabilityId)
+        } else if (selectedAccount !== 'all') {
           q = q.eq('account_id', selectedAccount)
         }
         return q
@@ -124,7 +137,8 @@ export default function TransactionsTab() {
     } else {
       setTransactions(txRes.data ?? [])
     }
-    setAccounts(accsRes.data ?? [])
+    // Filter out hidden shadow accounts from the dropdown
+    setAccounts((accsRes.data ?? []).filter((a) => !a.is_hidden))
     setSyncedLiabilities(liabsRes.data ?? [])
     setLoading(false)
   }, [dateRange, selectedAccount])
@@ -396,9 +410,9 @@ export default function TransactionsTab() {
                       <TableCell
                         className="text-xs text-[#7d8590] truncate"
                         style={{ maxWidth: 130 }}
-                        title={tx.accounts?.name ?? ''}
+                        title={tx.liabilities?.name ?? tx.accounts?.name ?? ''}
                       >
-                        {tx.accounts?.name ?? '--'}
+                        {tx.liabilities?.name ?? tx.accounts?.name ?? '--'}
                       </TableCell>
                       <TableCell>
                         <span

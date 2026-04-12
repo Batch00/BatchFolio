@@ -28,14 +28,31 @@ const fmt = (v) =>
     maximumFractionDigits: 0,
   }).format(v)
 
+const CLASS_COLORS = {
+  'Cash': '#6b7280',
+  'Fixed Income': '#3b82f6',
+  'Real Estate': '#f59e0b',
+  'International': '#8b5cf6',
+  'US Large Cap': '#10b981',
+  'US Mid/Small Cap': '#34d399',
+  'Balanced': '#06b6d4',
+  'Sector': '#ef4444',
+  'US Equities': '#065f46',
+}
+
 function getAssetClass(ticker, description) {
   const t = (ticker || '').toLowerCase()
   const d = (description || '').toLowerCase()
+  const td = t + ' ' + d
   if (t === 'cash') return 'Cash'
-  if (/bond|fixed|income|treasury|bnd|vbtlx|agg/.test(t + d)) return 'Fixed Income'
-  if (/reit|real estate|property|vnq/.test(t + d)) return 'Real Estate'
-  if (/international|intl|foreign|vxus|vtiax|eafe/.test(t + d)) return 'International'
-  return 'Equities'
+  if (/bond|fixed income|income fund|treasury|government|corporate bond|bnd|agg|lqd|vbtlx|tlt|shy/.test(td)) return 'Fixed Income'
+  if (/reit|real estate|property|vnq|schh/.test(td)) return 'Real Estate'
+  if (/international|intl|foreign|emerging market|global|world|eafe|vxus|vtiax|veu|efa|vwo|fspsx|dldrx/.test(td)) return 'International'
+  if (/large cap|s&p 500|500 index|large-cap|sp500|fxaix|voo|spy|ivv|schx|seegx|pcbix|astlv/.test(td)) return 'US Large Cap'
+  if (/small cap|mid cap|small-cap|mid-cap|extended market|completion|iwm|vb|vxf|vimax|mvckx/.test(td)) return 'US Mid/Small Cap'
+  if (/balanced|target|allocation|moderate|conservative|growth|prwcx|vwenx/.test(td)) return 'Balanced'
+  if (/sector|energy|technology|health|financial|utility|xle|pxe|igv|dgro|dfcex|dffvx/.test(td)) return 'Sector'
+  return 'US Equities'
 }
 
 export default function AllocationWidget({ loading, holdings }) {
@@ -44,7 +61,9 @@ export default function AllocationWidget({ loading, holdings }) {
   const total = holdings.reduce((s, h) => s + h.value, 0)
 
   let data
+  let useClassColors = false
   if (view === 'class') {
+    useClassColors = true
     const classMap = {}
     holdings.forEach((h) => {
       if (h.value <= 0) return
@@ -62,11 +81,18 @@ export default function AllocationWidget({ loading, holdings }) {
     data = holdings
       .filter((h) => h.value > 0)
       .slice(0, 6)
-      .map((h) => ({
-        ticker: h.ticker,
-        value: h.value,
-        pct: total > 0 ? (h.value / total) * 100 : 0,
-      }))
+      .map((h) => {
+        // Use description as label when available (shows fund names instead of opaque tickers)
+        // For CASH, description is set to "Cash - AccountName"
+        const label = h.description
+          ? h.description.substring(0, 20)
+          : h.ticker
+        return {
+          ticker: label,
+          value: h.value,
+          pct: total > 0 ? (h.value / total) * 100 : 0,
+        }
+      })
   }
 
   return (
@@ -124,8 +150,8 @@ export default function AllocationWidget({ loading, holdings }) {
                   dataKey="value"
                   strokeWidth={0}
                 >
-                  {data.map((_, i) => (
-                    <Cell key={i} fill={SLICE_COLORS[i % SLICE_COLORS.length]} />
+                  {data.map((d, i) => (
+                    <Cell key={i} fill={useClassColors ? (CLASS_COLORS[d.ticker] ?? SLICE_COLORS[i % SLICE_COLORS.length]) : SLICE_COLORS[i % SLICE_COLORS.length]} />
                   ))}
                   <Label
                     content={({ viewBox }) => {
@@ -163,7 +189,11 @@ export default function AllocationWidget({ loading, holdings }) {
           </div>
 
           <div className="flex flex-col gap-1.5 w-full mt-3">
-            {data.map((d, i) => (
+            {data.map((d, i) => {
+              const color = useClassColors
+                ? (CLASS_COLORS[d.ticker] ?? SLICE_COLORS[i % SLICE_COLORS.length])
+                : SLICE_COLORS[i % SLICE_COLORS.length]
+              return (
               <div key={d.ticker} className="flex items-center gap-2 px-1">
                 <span
                   style={{
@@ -171,12 +201,12 @@ export default function AllocationWidget({ loading, holdings }) {
                     height: 8,
                     borderRadius: '50%',
                     flexShrink: 0,
-                    background: SLICE_COLORS[i % SLICE_COLORS.length],
+                    background: color,
                   }}
                 />
                 <span
-                  className="font-mono text-[11px] text-[#10b981] truncate"
-                  style={{ minWidth: 0, maxWidth: 60 }}
+                  className="font-mono text-[11px] truncate"
+                  style={{ minWidth: 0, maxWidth: 80, color: color }}
                   title={d.ticker}
                 >
                   {d.ticker}
@@ -188,7 +218,8 @@ export default function AllocationWidget({ loading, holdings }) {
                   {fmt(d.value)}
                 </span>
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
