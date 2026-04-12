@@ -88,6 +88,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
   const [allocView, setAllocView] = useState('ticker')
   const [totalLiabilities, setTotalLiabilities] = useState(0)
   const [showAllAccSummary, setShowAllAccSummary] = useState(false)
+  const [accountValues, setAccountValues] = useState({})
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -99,7 +100,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
         .select(
           '*, last_synced_price, is_synced, description, cost_basis_total, currency, purchase_price, accounts(id, name, is_hidden, is_excluded)',
         ),
-      supabase.from('accounts').select('id, name, type, balance, is_hidden, is_excluded').order('created_at'),
+      supabase.from('accounts').select('id, name, type, balance, is_synced, is_hidden, is_excluded').order('created_at'),
       supabase.from('liabilities').select('balance'),
     ])
 
@@ -187,6 +188,18 @@ export default function PortfolioTab({ onOpenDrawer }) {
       }
     })
 
+    // Per-account values: synced accounts use SimpleFIN balance, manual use holdings sum
+    const accValuesMap = {}
+    allAccounts.forEach((acc) => {
+      if (acc.is_synced && (acc.balance ?? 0) > 0) {
+        accValuesMap[acc.id] = acc.balance
+      } else {
+        const accHoldings = enriched.filter((h) => h.account_id === acc.id)
+        accValuesMap[acc.id] = accHoldings.reduce((s, h) => s + (h.value || 0), 0)
+      }
+    })
+    setAccountValues(accValuesMap)
+
     // Merge duplicate tickers across accounts (CASH rows stay separate per account)
     const mergedMap = {}
     for (const h of enriched) {
@@ -269,17 +282,15 @@ export default function PortfolioTab({ onOpenDrawer }) {
 
   const totalValue = filteredRows.reduce((s, r) => s + r.value, 0)
 
-  // Account summary: per-account value from rows (before account filter)
-  const accountValueMap = {}
-  rows.forEach((r) => {
-    const id = r.accountId ?? r.account_id
-    accountValueMap[id] = (accountValueMap[id] || 0) + (r.value || 0)
-  })
+  // Account summary: synced accounts use SimpleFIN balance, manual use holdings value
+  const getAccountValue = (acc) => accountValues[acc.id] || 0
+  const totalAssets = accounts.reduce((s, acc) => s + getAccountValue(acc), 0)
+  const totalForBars = Math.max(totalAssets, 1)
+
   const accountSummary = accounts
-    .map((acc) => ({ ...acc, computedValue: accountValueMap[acc.id] || 0 }))
+    .map((acc) => ({ ...acc, computedValue: getAccountValue(acc) }))
     .filter((acc) => acc.computedValue > 0)
     .sort((a, b) => b.computedValue - a.computedValue)
-  const maxAccValue = accountSummary.length > 0 ? accountSummary[0].computedValue : 1
   const visibleAccSummary = showAllAccSummary ? accountSummary : accountSummary.slice(0, 4)
 
   // Allocation data - by ticker or by asset class
@@ -440,16 +451,16 @@ export default function PortfolioTab({ onOpenDrawer }) {
               </div>
 
               <div className="flex items-start gap-4">
-                {/* Donut: fixed 140px */}
-                <div style={{ width: 140, height: 140, flexShrink: 0 }}>
+                {/* Donut: fixed 160px */}
+                <div style={{ width: 160, height: 160, flexShrink: 0 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={allocDonut}
                         cx="50%"
                         cy="50%"
-                        innerRadius={38}
-                        outerRadius={62}
+                        innerRadius={45}
+                        outerRadius={70}
                         paddingAngle={2}
                         dataKey="value"
                         strokeWidth={0}
@@ -476,20 +487,21 @@ export default function PortfolioTab({ onOpenDrawer }) {
 
                 {/* Legend: single column, scrollable */}
                 <div
-                  className="flex flex-col gap-[6px] flex-1 min-w-0"
+                  className="flex flex-col gap-[5px] flex-1 min-w-0"
                   style={{
                     maxHeight: 200,
                     overflowY: 'auto',
+                    paddingRight: 4,
                     scrollbarWidth: 'thin',
                     scrollbarColor: '#21262d #0d1117',
                   }}
                 >
                   {allocLegend.map((d) => (
-                    <div key={d.label + d.value} className="flex items-center gap-2 min-w-0">
+                    <div key={d.label + d.value} className="flex items-center gap-[6px] min-w-0">
                       <span
                         style={{
-                          width: 7,
-                          height: 7,
+                          width: 8,
+                          height: 8,
                           borderRadius: '50%',
                           flexShrink: 0,
                           background: d.color,
@@ -497,14 +509,14 @@ export default function PortfolioTab({ onOpenDrawer }) {
                       />
                       <span
                         className="font-mono flex-1 truncate"
-                        style={{ fontSize: 11, color: d.color, minWidth: 0 }}
+                        style={{ fontSize: 11, color: '#e6edf3', minWidth: 0 }}
                         title={d.fullLabel}
                       >
                         {d.label}
                       </span>
                       <span
                         className="font-mono text-[#7d8590]"
-                        style={{ fontSize: 11, flexShrink: 0, width: 44, textAlign: 'right' }}
+                        style={{ fontSize: 11, flexShrink: 0, width: 40, textAlign: 'right' }}
                       >
                         {d.pct.toFixed(1)}%
                       </span>
@@ -560,7 +572,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                       <div
                         style={{
                           height: '100%',
-                          width: `${(acc.computedValue / maxAccValue) * 100}%`,
+                          width: `${(acc.computedValue / totalForBars) * 100}%`,
                           background: TYPE_COLORS[acc.type] ?? '#7d8590',
                           borderRadius: 2,
                           transition: 'width 0.4s ease',
@@ -593,7 +605,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                     Total Assets
                   </span>
                   <span className="font-mono text-[#e6edf3]" style={{ fontSize: 11 }}>
-                    {fmt(totalValue)}
+                    {fmt(totalAssets)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -618,10 +630,10 @@ export default function PortfolioTab({ onOpenDrawer }) {
                     className="font-mono font-semibold"
                     style={{
                       fontSize: 11,
-                      color: totalValue - totalLiabilities >= 0 ? '#34d399' : '#f87171',
+                      color: totalAssets - totalLiabilities >= 0 ? '#34d399' : '#f87171',
                     }}
                   >
-                    {fmt(totalValue - totalLiabilities)}
+                    {fmt(totalAssets - totalLiabilities)}
                   </span>
                 </div>
               </div>

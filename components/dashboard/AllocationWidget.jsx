@@ -150,8 +150,8 @@ export default function AllocationWidget({ loading, holdings }) {
           No holdings yet.
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-3">
-          {/* Donut — centered, 120px */}
+        <div className="flex items-start gap-3">
+          {/* Donut — 120px */}
           <div style={{ width: 120, height: 120, flexShrink: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -159,8 +159,8 @@ export default function AllocationWidget({ loading, holdings }) {
                   data={donutData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={30}
-                  outerRadius={54}
+                  innerRadius={35}
+                  outerRadius={55}
                   paddingAngle={2}
                   dataKey="value"
                   strokeWidth={0}
@@ -203,14 +203,17 @@ export default function AllocationWidget({ loading, holdings }) {
             </ResponsiveContainer>
           </div>
 
-          {/* Legend — single column below donut */}
-          <div className="flex flex-col gap-[5px] w-full" style={{ minWidth: 200, maxWidth: 260, margin: '0 auto' }}>
+          {/* Legend — flex 1, same row as donut */}
+          <div
+            className="flex flex-col gap-[5px] flex-1 min-w-0"
+            style={{ maxHeight: 180, overflowY: 'auto', paddingRight: 4 }}
+          >
             {visibleLegend.map((d) => (
-              <div key={d.label + d.value} className="flex items-center gap-2">
+              <div key={d.label + d.value} className="flex items-center gap-[6px] min-w-0">
                 <span
                   style={{
-                    width: 7,
-                    height: 7,
+                    width: 8,
+                    height: 8,
                     borderRadius: '50%',
                     flexShrink: 0,
                     background: d.color,
@@ -218,21 +221,21 @@ export default function AllocationWidget({ loading, holdings }) {
                 />
                 <span
                   className="font-mono flex-1 truncate"
-                  style={{ fontSize: 11, color: d.color, minWidth: 0 }}
+                  style={{ fontSize: 11, color: '#e6edf3', minWidth: 0 }}
                   title={d.fullLabel}
                 >
                   {d.label}
                 </span>
                 <span
                   className="font-mono text-[#7d8590]"
-                  style={{ fontSize: 11, flexShrink: 0, width: 44, textAlign: 'right' }}
+                  style={{ fontSize: 11, flexShrink: 0, width: 40, textAlign: 'right' }}
                 >
                   {d.pct.toFixed(1)}%
                 </span>
               </div>
             ))}
             {hiddenCount > 0 && (
-              <p className="font-mono text-[10px] text-[#7d8590] pl-4">
+              <p className="font-mono text-[10px] text-[#7d8590]">
                 +{hiddenCount} more
               </p>
             )}
