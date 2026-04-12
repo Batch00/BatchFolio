@@ -204,7 +204,7 @@ export default function AllocationWidget({ loading, holdings }) {
           </div>
 
           {/* Legend — single column below donut */}
-          <div className="flex flex-col gap-[5px] w-full" style={{ minWidth: 200 }}>
+          <div className="flex flex-col gap-[5px] w-full" style={{ minWidth: 200, maxWidth: 260, margin: '0 auto' }}>
             {visibleLegend.map((d) => (
               <div key={d.label + d.value} className="flex items-center gap-2">
                 <span
@@ -225,7 +225,7 @@ export default function AllocationWidget({ loading, holdings }) {
                 </span>
                 <span
                   className="font-mono text-[#7d8590]"
-                  style={{ fontSize: 11, flexShrink: 0, width: 40, textAlign: 'right' }}
+                  style={{ fontSize: 11, flexShrink: 0, width: 44, textAlign: 'right' }}
                 >
                   {d.pct.toFixed(1)}%
                 </span>

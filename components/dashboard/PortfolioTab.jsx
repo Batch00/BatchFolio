@@ -69,6 +69,12 @@ function getAssetClass(ticker, description) {
   return 'US Equities'
 }
 
+const TYPE_COLORS = {
+  brokerage: '#10b981',
+  retirement: '#f59e0b',
+  bank: '#6b7280',
+}
+
 export default function PortfolioTab({ onOpenDrawer }) {
   const supabase = createClient()
   const [rows, setRows] = useState([])
@@ -80,18 +86,21 @@ export default function PortfolioTab({ onOpenDrawer }) {
   const [sortDir, setSortDir] = useState('desc')
   const [selectedAccountId, setSelectedAccountId] = useState(null)
   const [allocView, setAllocView] = useState('ticker')
+  const [totalLiabilities, setTotalLiabilities] = useState(0)
+  const [showAllAccSummary, setShowAllAccSummary] = useState(false)
 
   const loadData = useCallback(async () => {
     setLoading(true)
     setError(null)
 
-    const [holdRes, accRes] = await Promise.all([
+    const [holdRes, accRes, liabRes] = await Promise.all([
       supabase
         .from('holdings')
         .select(
           '*, last_synced_price, is_synced, description, cost_basis_total, currency, purchase_price, accounts(id, name, is_hidden, is_excluded)',
         ),
-      supabase.from('accounts').select('id, name, is_hidden, is_excluded').order('created_at'),
+      supabase.from('accounts').select('id, name, type, balance, is_hidden, is_excluded').order('created_at'),
+      supabase.from('liabilities').select('balance'),
     ])
 
     if (holdRes.error) {
@@ -99,6 +108,10 @@ export default function PortfolioTab({ onOpenDrawer }) {
       setLoading(false)
       return
     }
+
+    setTotalLiabilities(
+      (liabRes.data ?? []).reduce((s, l) => s + (parseFloat(l.balance) || 0), 0)
+    )
 
     const excludedAccountIds = new Set(
       (accRes.data ?? []).filter((a) => a.is_hidden || a.is_excluded).map((a) => a.id)
@@ -256,6 +269,19 @@ export default function PortfolioTab({ onOpenDrawer }) {
 
   const totalValue = filteredRows.reduce((s, r) => s + r.value, 0)
 
+  // Account summary: per-account value from rows (before account filter)
+  const accountValueMap = {}
+  rows.forEach((r) => {
+    const id = r.accountId ?? r.account_id
+    accountValueMap[id] = (accountValueMap[id] || 0) + (r.value || 0)
+  })
+  const accountSummary = accounts
+    .map((acc) => ({ ...acc, computedValue: accountValueMap[acc.id] || 0 }))
+    .filter((acc) => acc.computedValue > 0)
+    .sort((a, b) => b.computedValue - a.computedValue)
+  const maxAccValue = accountSummary.length > 0 ? accountSummary[0].computedValue : 1
+  const visibleAccSummary = showAllAccSummary ? accountSummary : accountSummary.slice(0, 4)
+
   // Allocation data - by ticker or by asset class
   const allocationSource = sorted.filter((r) => r.value > 0)
   let allocLegend = []  // shown in legend (individual items)
@@ -377,111 +403,231 @@ export default function PortfolioTab({ onOpenDrawer }) {
         </div>
       )}
 
-      {/* Allocation donut */}
-      {!loading && allocDonut.length > 0 && (
-        <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] uppercase tracking-widest text-[#7d8590] font-mono">
-              Allocation
-            </p>
-            <div className="flex items-center gap-1">
-              {[
-                { id: 'ticker', label: 'Ticker' },
-                { id: 'class', label: 'Class' },
-              ].map((opt) => (
-                <button
-                  key={opt.id}
-                  onClick={() => setAllocView(opt.id)}
-                  className="font-mono transition-colors"
+      {/* Two-panel: Allocation + Account Summary */}
+      {!loading && (allocDonut.length > 0 || accountSummary.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          {/* Left: Allocation donut */}
+          {allocDonut.length > 0 && (
+            <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] uppercase tracking-widest text-[#7d8590] font-mono">
+                  Allocation
+                </p>
+                <div className="flex items-center gap-1">
+                  {[
+                    { id: 'ticker', label: 'Ticker' },
+                    { id: 'class', label: 'Class' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.id}
+                      onClick={() => setAllocView(opt.id)}
+                      className="font-mono transition-colors"
+                      style={{
+                        fontSize: 9,
+                        letterSpacing: '0.05em',
+                        padding: '2px 6px',
+                        borderRadius: 3,
+                        border: `1px solid ${allocView === opt.id ? '#10b981' : '#21262d'}`,
+                        background: allocView === opt.id ? 'rgba(16,185,129,0.12)' : 'transparent',
+                        color: allocView === opt.id ? '#10b981' : '#7d8590',
+                      }}
+                    >
+                      {opt.label.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4">
+                {/* Donut: fixed 140px */}
+                <div style={{ width: 140, height: 140, flexShrink: 0 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={allocDonut}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={38}
+                        outerRadius={62}
+                        paddingAngle={2}
+                        dataKey="value"
+                        strokeWidth={0}
+                      >
+                        {allocDonut.map((d, i) => (
+                          <Cell key={i} fill={d.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (!active || !payload?.length) return null
+                          const d = payload[0].payload
+                          return (
+                            <div className="bg-[#161b22] border border-[#21262d] rounded px-2 py-1">
+                              <p className="font-mono text-xs" style={{ color: d.color }}>{d.label}</p>
+                              <p className="font-mono text-xs text-[#e6edf3]">{d.pct.toFixed(1)}%</p>
+                            </div>
+                          )
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Legend: single column, scrollable */}
+                <div
+                  className="flex flex-col gap-[6px] flex-1 min-w-0"
                   style={{
-                    fontSize: 9,
-                    letterSpacing: '0.05em',
-                    padding: '2px 6px',
-                    borderRadius: 3,
-                    border: `1px solid ${allocView === opt.id ? '#10b981' : '#21262d'}`,
-                    background: allocView === opt.id ? 'rgba(16,185,129,0.12)' : 'transparent',
-                    color: allocView === opt.id ? '#10b981' : '#7d8590',
+                    maxHeight: 200,
+                    overflowY: 'auto',
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: '#21262d #0d1117',
                   }}
                 >
-                  {opt.label.toUpperCase()}
+                  {allocLegend.map((d) => (
+                    <div key={d.label + d.value} className="flex items-center gap-2 min-w-0">
+                      <span
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: '50%',
+                          flexShrink: 0,
+                          background: d.color,
+                        }}
+                      />
+                      <span
+                        className="font-mono flex-1 truncate"
+                        style={{ fontSize: 11, color: d.color, minWidth: 0 }}
+                        title={d.fullLabel}
+                      >
+                        {d.label}
+                      </span>
+                      <span
+                        className="font-mono text-[#7d8590]"
+                        style={{ fontSize: 11, flexShrink: 0, width: 44, textAlign: 'right' }}
+                      >
+                        {d.pct.toFixed(1)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Right: Account Summary */}
+          {accountSummary.length > 0 && (
+            <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4 flex flex-col">
+              <p
+                className="text-[10px] uppercase text-[#7d8590] font-mono mb-3"
+                style={{ letterSpacing: '0.08em' }}
+              >
+                Account Summary
+              </p>
+
+              <div className="flex flex-col gap-2.5 flex-1">
+                {visibleAccSummary.map((acc) => (
+                  <div key={acc.id}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span
+                        className="font-mono flex-1 truncate text-[#e6edf3]"
+                        style={{ fontSize: 11 }}
+                        title={acc.name}
+                      >
+                        {acc.name}
+                      </span>
+                      <span
+                        className="font-mono flex-shrink-0"
+                        style={{
+                          fontSize: 9,
+                          letterSpacing: '0.04em',
+                          color: TYPE_COLORS[acc.type] ?? '#7d8590',
+                          border: `1px solid ${TYPE_COLORS[acc.type] ?? '#7d8590'}44`,
+                          borderRadius: 3,
+                          padding: '1px 5px',
+                        }}
+                      >
+                        {(acc.type || 'other').toUpperCase()}
+                      </span>
+                      <span
+                        className="font-mono text-[#e6edf3] flex-shrink-0"
+                        style={{ fontSize: 11, width: 76, textAlign: 'right' }}
+                      >
+                        {fmt(acc.computedValue)}
+                      </span>
+                    </div>
+                    <div style={{ height: 3, background: '#21262d', borderRadius: 2 }}>
+                      <div
+                        style={{
+                          height: '100%',
+                          width: `${(acc.computedValue / maxAccValue) * 100}%`,
+                          background: TYPE_COLORS[acc.type] ?? '#7d8590',
+                          borderRadius: 2,
+                          transition: 'width 0.4s ease',
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {accountSummary.length > 4 && (
+                <button
+                  onClick={() => setShowAllAccSummary((s) => !s)}
+                  className="font-mono text-left mt-2 transition-colors"
+                  style={{ fontSize: 10, color: '#7d8590' }}
+                  onMouseEnter={(e) => (e.target.style.color = '#e6edf3')}
+                  onMouseLeave={(e) => (e.target.style.color = '#7d8590')}
+                >
+                  {showAllAccSummary ? 'Show less' : `+${accountSummary.length - 4} more`}
                 </button>
-              ))}
-            </div>
-          </div>
+              )}
 
-          <div className="flex items-start gap-4">
-            {/* Donut: fixed 140px, uses grouped data */}
-            <div style={{ width: 140, height: 140, flexShrink: 0 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={allocDonut}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={38}
-                    outerRadius={62}
-                    paddingAngle={2}
-                    dataKey="value"
-                    strokeWidth={0}
-                  >
-                    {allocDonut.map((d, i) => (
-                      <Cell key={i} fill={d.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null
-                      const d = payload[0].payload
-                      return (
-                        <div className="bg-[#161b22] border border-[#21262d] rounded px-2 py-1">
-                          <p className="font-mono text-xs" style={{ color: d.color }}>{d.label}</p>
-                          <p className="font-mono text-xs text-[#e6edf3]">{d.pct.toFixed(1)}%</p>
-                        </div>
-                      )
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Legend: single column, full remaining width, scrollable if long */}
-            <div
-              className="flex flex-col gap-[6px] flex-1 min-w-0"
-              style={{
-                maxHeight: 200,
-                overflowY: 'auto',
-                scrollbarWidth: 'thin',
-                scrollbarColor: '#21262d #0d1117',
-              }}
-            >
-              {allocLegend.map((d) => (
-                <div key={d.label + d.value} className="flex items-center gap-2 min-w-0">
+              {/* Totals */}
+              <div className="border-t border-[#21262d] mt-3 pt-3 space-y-1.5">
+                <div className="flex items-center justify-between">
                   <span
-                    style={{
-                      width: 7,
-                      height: 7,
-                      borderRadius: '50%',
-                      flexShrink: 0,
-                      background: d.color,
-                    }}
-                  />
-                  <span
-                    className="font-mono flex-1 truncate"
-                    style={{ fontSize: 11, color: d.color, minWidth: 0 }}
-                    title={d.fullLabel}
+                    className="font-mono text-[#7d8590] uppercase"
+                    style={{ fontSize: 10, letterSpacing: '0.05em' }}
                   >
-                    {d.label}
+                    Total Assets
                   </span>
-                  <span
-                    className="font-mono text-[#7d8590]"
-                    style={{ fontSize: 11, flexShrink: 0, width: 42, textAlign: 'right' }}
-                  >
-                    {d.pct.toFixed(1)}%
+                  <span className="font-mono text-[#e6edf3]" style={{ fontSize: 11 }}>
+                    {fmt(totalValue)}
                   </span>
                 </div>
-              ))}
+                <div className="flex items-center justify-between">
+                  <span
+                    className="font-mono text-[#7d8590] uppercase"
+                    style={{ fontSize: 10, letterSpacing: '0.05em' }}
+                  >
+                    Liabilities
+                  </span>
+                  <span className="font-mono text-[#f87171]" style={{ fontSize: 11 }}>
+                    {totalLiabilities > 0 ? `-${fmt(totalLiabilities)}` : fmt(0)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-[#21262d]">
+                  <span
+                    className="font-mono text-[#7d8590] uppercase"
+                    style={{ fontSize: 10, letterSpacing: '0.05em' }}
+                  >
+                    Net Worth
+                  </span>
+                  <span
+                    className="font-mono font-semibold"
+                    style={{
+                      fontSize: 11,
+                      color: totalValue - totalLiabilities >= 0 ? '#34d399' : '#f87171',
+                    }}
+                  >
+                    {fmt(totalValue - totalLiabilities)}
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
+
         </div>
       )}
 
