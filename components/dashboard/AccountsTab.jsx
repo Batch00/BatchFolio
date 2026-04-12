@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogContent,
@@ -44,6 +43,36 @@ function fmtDate(dateStr) {
   })
 }
 
+function mergeHoldings(holdings) {
+  const merged = {}
+  for (const h of holdings) {
+    if (merged[h.ticker]) {
+      const existing = merged[h.ticker]
+      const totalShares = existing.shares + h.shares
+      const existingMV = (existing.last_synced_price ?? 0) * existing.shares
+      const newMV = (h.last_synced_price ?? 0) * h.shares
+      const totalValue = existingMV + newMV
+      const totalCostBasis = (existing.cost_basis_total || 0) + (h.cost_basis_total || 0)
+      merged[h.ticker] = {
+        ...existing,
+        shares: totalShares,
+        cost_basis_total: totalCostBasis > 0 ? totalCostBasis : null,
+        avg_cost_basis: totalCostBasis > 0 ? totalCostBasis / totalShares : 0,
+        last_synced_price: totalShares > 0 ? totalValue / totalShares : existing.last_synced_price,
+      }
+    } else {
+      merged[h.ticker] = { ...h }
+    }
+  }
+  return Object.values(merged)
+}
+
+function typeBadge(type) {
+  if (type === 'retirement') return { background: 'rgba(59,130,246,0.1)', color: '#60a5fa' }
+  if (type === 'bank') return { background: 'rgba(251,191,36,0.1)', color: '#fbbf24' }
+  return { background: 'rgba(16,185,129,0.1)', color: '#10b981' }
+}
+
 function SortableAccountRow({
   acc, holdings, prices, expanded, toggleExpand, accountTotal, fmtBalanceDate,
   openEditAccount, deleteAccount, toggleExclude, openAddHolding, openEditHolding,
@@ -57,9 +86,12 @@ function SortableAccountRow({
   }
 
   const total = accountTotal(acc)
-  const holdList = holdings[acc.id] ?? []
+  const holdList = mergeHoldings(holdings[acc.id] ?? [])
   const isExpanded = expanded[acc.id]
   const isExcluded = acc.is_excluded ?? false
+  const hasGainData = holdList.some(
+    (h) => h.ticker !== 'CASH' && h.avg_cost_basis > 0 && (h.last_synced_price ?? 0) > 0
+  )
 
   return (
     <div
@@ -127,9 +159,21 @@ function SortableAccountRow({
             </div>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-xs text-[#7d8590]">{acc.provider}</span>
-              <Badge variant="secondary" className="text-xs py-0 h-4">
+              <span
+                style={{
+                  ...typeBadge(acc.type),
+                  fontSize: 9,
+                  letterSpacing: '0.06em',
+                  padding: '1px 5px',
+                  borderRadius: 3,
+                  fontFamily: 'monospace',
+                  textTransform: 'uppercase',
+                  flexShrink: 0,
+                  border: '1px solid transparent',
+                }}
+              >
                 {acc.type}
-              </Badge>
+              </span>
             </div>
           </div>
         </button>
@@ -194,16 +238,26 @@ function SortableAccountRow({
           ) : (
             <div className="overflow-x-auto">
               <table style={{ tableLayout: 'fixed', width: '100%', borderCollapse: 'collapse' }}>
+                <colgroup>
+                  <col style={{ width: 70 }} />
+                  <col style={{ minWidth: 220 }} />
+                  <col className="hidden md:table-column" style={{ width: 80 }} />
+                  <col className="hidden md:table-column" style={{ width: 90 }} />
+                  <col style={{ width: 90 }} />
+                  <col style={{ width: 100 }} />
+                  {hasGainData && <col style={{ width: 80 }} />}
+                  <col style={{ width: 56 }} />
+                </colgroup>
                 <thead>
                   <tr style={{ fontSize: 10, color: '#7d8590', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    <th style={{ width: 70, padding: '4px 8px', textAlign: 'left', fontWeight: 500 }}>Ticker</th>
-                    <th style={{ width: 180, padding: '4px 8px', textAlign: 'left', fontWeight: 500 }}>Description</th>
-                    <th style={{ width: 80, padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">Shares</th>
-                    <th style={{ width: 90, padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">Avg Cost</th>
-                    <th style={{ width: 90, padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Price</th>
-                    <th style={{ width: 100, padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Value</th>
-                    <th style={{ width: 80, padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Gain%</th>
-                    <th style={{ width: 60, padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} />
+                    <th style={{ padding: '4px 8px', textAlign: 'left', fontWeight: 500 }}>Ticker</th>
+                    <th style={{ padding: '4px 8px', textAlign: 'left', fontWeight: 500 }}>Description</th>
+                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">Shares</th>
+                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">Avg Cost</th>
+                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Price</th>
+                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Value</th>
+                    {hasGainData && <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Gain%</th>}
+                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} />
                   </tr>
                 </thead>
                 <tbody>
@@ -218,7 +272,7 @@ function SortableAccountRow({
                     const desc = h.description || h.ticker
                     return (
                       <tr key={h.id} style={{ height: 36, borderBottom: '1px solid #21262d' }}>
-                        <td style={{ padding: '6px 8px', width: 70 }}>
+                        <td style={{ padding: '6px 8px', overflow: 'hidden' }}>
                           <div className="flex items-center gap-1">
                             {isCash ? (
                               <span className="font-mono text-xs text-[#7d8590]">CASH</span>
@@ -235,36 +289,38 @@ function SortableAccountRow({
                             )}
                           </div>
                         </td>
-                        <td style={{ padding: '6px 8px', width: 180, overflow: 'hidden' }}>
+                        <td style={{ padding: '6px 8px', overflow: 'hidden' }}>
                           <p
                             style={{ fontSize: 11, color: '#7d8590', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                            title={desc}
+                            title={h.description || h.ticker}
                           >
-                            {desc.length > 22 ? desc.slice(0, 22) + '...' : desc}
+                            {desc}
                           </p>
                         </td>
-                        <td style={{ padding: '6px 8px', width: 80, textAlign: 'right' }} className="hidden md:table-cell">
+                        <td style={{ padding: '6px 8px', textAlign: 'right' }} className="hidden md:table-cell">
                           <span className="font-mono text-xs text-[#e6edf3]">{isCash ? '-' : h.shares}</span>
                         </td>
-                        <td style={{ padding: '6px 8px', width: 90, textAlign: 'right' }} className="hidden md:table-cell">
+                        <td style={{ padding: '6px 8px', textAlign: 'right' }} className="hidden md:table-cell">
                           <span className="font-mono text-xs text-[#e6edf3]">{isCash ? '-' : fmt(h.avg_cost_basis > 0 ? h.avg_cost_basis : 0)}</span>
                         </td>
-                        <td style={{ padding: '6px 8px', width: 90, textAlign: 'right' }}>
+                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>
                           <span className="font-mono text-xs text-[#e6edf3]">{isCash ? '-' : fmt(livePrice)}</span>
                         </td>
-                        <td style={{ padding: '6px 8px', width: 100, textAlign: 'right' }}>
+                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>
                           <span className="font-mono text-xs text-[#e6edf3]">{fmt(value)}</span>
                         </td>
-                        <td style={{ padding: '6px 8px', width: 80, textAlign: 'right' }}>
-                          {isCash ? (
-                            <span className="font-mono text-xs text-[#7d8590]">-</span>
-                          ) : (
-                            <span className={`font-mono text-xs ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}>
-                              {positive ? '+' : ''}{gainPct.toFixed(2)}%
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ padding: '6px 8px', width: 60, textAlign: 'right' }}>
+                        {hasGainData && (
+                          <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                            {isCash ? (
+                              <span className="font-mono text-xs text-[#7d8590]">-</span>
+                            ) : (
+                              <span className={`font-mono text-xs ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}>
+                                {positive ? '+' : ''}{gainPct.toFixed(2)}%
+                              </span>
+                            )}
+                          </td>
+                        )}
+                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>
                           <div className="flex items-center justify-end">
                             {!h.is_synced && (
                               <button
@@ -1028,6 +1084,7 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                 <SelectContent>
                   <SelectItem value="brokerage">Brokerage</SelectItem>
                   <SelectItem value="retirement">Retirement</SelectItem>
+                  <SelectItem value="bank">Bank Account</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1091,6 +1148,7 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                     <SelectContent>
                       <SelectItem value="brokerage">Brokerage</SelectItem>
                       <SelectItem value="retirement">Retirement</SelectItem>
+                      <SelectItem value="bank">Bank Account</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

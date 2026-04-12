@@ -157,7 +157,33 @@ export default function PortfolioTab({ onOpenDrawer }) {
       }
     })
 
-    setRows(enriched)
+    // Merge duplicate tickers across accounts
+    const mergedMap = {}
+    for (const h of enriched) {
+      if (mergedMap[h.ticker]) {
+        const ex = mergedMap[h.ticker]
+        const totalShares = ex.shares + h.shares
+        const totalValue = (ex.value ?? 0) + (h.value ?? 0)
+        const exCostBasis = ex.shares * (ex.avgCost ?? 0)
+        const hCostBasis = h.shares * (h.avgCost ?? 0)
+        const totalCostBasis = exCostBasis + hCostBasis
+        const gainLoss = (ex.gainLoss ?? 0) + (h.gainLoss ?? 0)
+        const gainPct = totalCostBasis > 0 ? (gainLoss / totalCostBasis) * 100 : null
+        mergedMap[h.ticker] = {
+          ...ex,
+          shares: totalShares,
+          value: totalValue,
+          avgCost: totalShares > 0 ? totalCostBasis / totalShares : ex.avgCost,
+          gainLoss,
+          gainPct,
+          account: ex.account === h.account ? ex.account : 'Multiple',
+        }
+      } else {
+        mergedMap[h.ticker] = { ...h }
+      }
+    }
+
+    setRows(Object.values(mergedMap))
     setLoading(false)
 
     if (tickers.length > 0) {

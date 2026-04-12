@@ -247,7 +247,28 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   const { changeDollar, changePct } = getChangeForRange()
   const changePositive = changeDollar >= 0
 
-  const enrichedHoldings = holdings
+  // Merge duplicate tickers before enrichment
+  const mergedHoldingsMap = {}
+  for (const h of holdings) {
+    if (mergedHoldingsMap[h.ticker]) {
+      const ex = mergedHoldingsMap[h.ticker]
+      const totalShares = ex.shares + h.shares
+      const exCBT = ex.cost_basis_total || ex.shares * ex.avg_cost_basis
+      const hCBT = h.cost_basis_total || h.shares * h.avg_cost_basis
+      const totalCBT = exCBT + hCBT
+      mergedHoldingsMap[h.ticker] = {
+        ...ex,
+        shares: totalShares,
+        avg_cost_basis: totalShares > 0 ? totalCBT / totalShares : ex.avg_cost_basis,
+        cost_basis_total: totalCBT,
+      }
+    } else {
+      mergedHoldingsMap[h.ticker] = { ...h }
+    }
+  }
+  const mergedHoldings = Object.values(mergedHoldingsMap)
+
+  const enrichedHoldings = mergedHoldings
     .map((h) => {
       const hasPrice = prices[h.ticker]?.price != null && prices[h.ticker].price > 0
       const livePrice = hasPrice ? prices[h.ticker].price : null

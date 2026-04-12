@@ -2,9 +2,23 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
-function detectAccountType(name) {
-  const lower = name.toLowerCase()
-  if (/401k|ira|roth|retirement/.test(lower)) return 'retirement'
+// Required SQL migrations (run in Supabase SQL editor):
+// ALTER TABLE batchfolio.accounts DROP CONSTRAINT IF EXISTS accounts_type_check;
+// ALTER TABLE batchfolio.accounts ADD CONSTRAINT accounts_type_check
+//   CHECK (type IN ('brokerage', 'retirement', 'bank'));
+
+function detectAccountType(name, orgName) {
+  const lower = (name || '').toLowerCase()
+  const org = (orgName || '').toLowerCase()
+
+  if (/401k|401\(k\)|ira|roth|retirement|pension|403b|457/.test(lower)) return 'retirement'
+
+  if (/checking|savings|chequing|money market|mmda|share draft|deposit/.test(lower)) return 'bank'
+
+  if (/chase|bank of america|wells fargo|citibank|us bank|pnc|td bank|capital one|horicon|community bank|credit union|national bank/.test(org)) {
+    if (!/brokerage|investment|trading|portfolio/.test(lower)) return 'bank'
+  }
+
   return 'brokerage'
 }
 
@@ -159,7 +173,7 @@ export async function POST() {
           .from('accounts')
           .update({
             provider: sfAcc.org?.name ?? 'SimpleFIN',
-            type: detectAccountType(sfAcc.name),
+            type: detectAccountType(sfAcc.name, sfAcc.org?.name),
             is_synced: true,
             balance: balanceNum,
             available_balance: availableBalanceNum,
@@ -175,7 +189,7 @@ export async function POST() {
             user_id: user.id,
             name: sfAcc.name,
             provider: sfAcc.org?.name ?? 'SimpleFIN',
-            type: detectAccountType(sfAcc.name),
+            type: detectAccountType(sfAcc.name, sfAcc.org?.name),
             simplefin_id: sfAcc.id,
             is_synced: true,
             balance: balanceNum,

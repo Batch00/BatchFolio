@@ -24,7 +24,7 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
 
   const headers = [
     { label: 'Ticker / Name', align: 'text-left', width: 'flex-1 min-w-[80px]' },
-    { label: '', align: '', width: 'w-[60px]' },
+    { label: '', align: '', width: 'w-[50px]' },
     { label: 'Shares', align: 'text-right', width: 'w-[60px]' },
     { label: 'Price', align: 'text-right', width: 'w-[72px]' },
     { label: 'Value', align: 'text-right', width: 'w-[80px]' },
@@ -78,21 +78,17 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
 
           {/* Scrollable list */}
           <div
-            className="divide-y divide-[#21262d] overflow-y-auto"
+            className="divide-y divide-[#21262d] overflow-x-hidden overflow-y-auto"
             style={{
               maxHeight: 320,
               scrollbarWidth: 'thin',
               scrollbarColor: '#21262d #0d1117',
+              scrollbarGutter: 'stable',
+              paddingRight: 2,
             }}
           >
             {filtered.map((h, i) => {
-              // Show description as primary label when available
               const hasDescription = h.description && h.description.trim().length > 0
-              const primaryLabel = hasDescription
-                ? h.description.length > 28
-                  ? h.description.slice(0, 28) + '...'
-                  : h.description
-                : null
 
               return (
                 <button
@@ -104,14 +100,15 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
                   style={{ height: 36 }}
                 >
                   {/* Ticker / Name */}
-                  <div className="flex-1 min-w-0 flex-shrink-0">
+                  <div className="flex-1 min-w-0">
                     {hasDescription ? (
                       <>
                         <p
-                          className="text-xs text-[#e6edf3] truncate leading-tight"
+                          className="text-xs text-[#e6edf3] leading-tight"
                           title={h.description}
+                          style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                         >
-                          {primaryLabel}
+                          {h.description}
                         </p>
                         <p className="font-mono text-[#7d8590] leading-tight" style={{ fontSize: 10 }}>
                           {h.ticker}
@@ -123,7 +120,7 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
                   </div>
 
                   {/* Sparkline */}
-                  <span className="w-[60px] flex-shrink-0 hidden md:block">
+                  <span className="w-[50px] flex-shrink-0 hidden md:block">
                     <Sparkline prices={sparklines[h.ticker]} positive={h.positive} />
                   </span>
 
