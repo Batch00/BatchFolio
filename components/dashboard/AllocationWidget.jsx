@@ -15,19 +15,6 @@ const SLICE_COLORS = [
   '#84cc16', // lime
 ]
 
-function fmtCompact(v) {
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`
-  if (v >= 1_000) return `$${Math.round(v / 1_000)}k`
-  return `$${Math.round(v)}`
-}
-
-const fmt = (v) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(v)
-
 const CLASS_COLORS = {
   'Cash': '#6b7280',
   'Fixed Income': '#3b82f6',
@@ -38,6 +25,12 @@ const CLASS_COLORS = {
   'Balanced': '#06b6d4',
   'Sector': '#ef4444',
   'US Equities': '#065f46',
+}
+
+function fmtCompact(v) {
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`
+  if (v >= 1_000) return `$${Math.round(v / 1_000)}k`
+  return `$${Math.round(v)}`
 }
 
 function getAssetClass(ticker, description) {
@@ -60,44 +53,65 @@ export default function AllocationWidget({ loading, holdings }) {
 
   const total = holdings.reduce((s, h) => s + h.value, 0)
 
-  let data
-  let useClassColors = false
+  // Build legend data and donut data separately
+  let legendData = []
+  let donutData = []
+
   if (view === 'class') {
-    useClassColors = true
     const classMap = {}
     holdings.forEach((h) => {
       if (h.value <= 0) return
       const cls = getAssetClass(h.ticker, h.description)
       classMap[cls] = (classMap[cls] || 0) + h.value
     })
-    data = Object.entries(classMap)
+    legendData = Object.entries(classMap)
       .map(([label, value]) => ({
-        ticker: label,
+        label,
         value,
         pct: total > 0 ? (value / total) * 100 : 0,
+        color: CLASS_COLORS[label] ?? '#7d8590',
       }))
       .sort((a, b) => b.value - a.value)
+    donutData = legendData
   } else {
-    data = holdings
+    // Ticker view: assign colors, track original ticker for CASH grouping
+    let colorIdx = 0
+    const allItems = holdings
       .filter((h) => h.value > 0)
-      .slice(0, 6)
+      .slice(0, 8)
       .map((h) => {
-        // Use description as label when available (shows fund names instead of opaque tickers)
-        // For CASH, description is set to "Cash - AccountName"
-        const label = h.description
-          ? h.description.substring(0, 20)
-          : h.ticker
+        const isCash = h.ticker === 'CASH'
+        const fullLabel = h.description || h.ticker
+        const label = fullLabel.length > 22 ? fullLabel.substring(0, 22) : fullLabel
         return {
-          ticker: label,
+          label,
+          fullLabel,
+          origTicker: h.ticker,
           value: h.value,
           pct: total > 0 ? (h.value / total) * 100 : 0,
+          color: isCash ? '#6b7280' : SLICE_COLORS[colorIdx++ % SLICE_COLORS.length],
         }
       })
+
+    legendData = allItems
+
+    // Group all CASH items into a single donut slice
+    const cashTotal = allItems.filter((d) => d.origTicker === 'CASH').reduce((s, d) => s + d.value, 0)
+    const nonCashItems = allItems.filter((d) => d.origTicker !== 'CASH')
+    const cashPct = total > 0 ? (cashTotal / total) * 100 : 0
+    donutData = cashTotal > 0
+      ? [...nonCashItems, { label: 'Cash', fullLabel: 'Cash', origTicker: 'CASH', value: cashTotal, pct: cashPct, color: '#6b7280' }]
+      : nonCashItems
   }
+
+  const MAX_VISIBLE = 8
+  const visibleLegend = legendData.slice(0, MAX_VISIBLE)
+  const hiddenCount = legendData.length - MAX_VISIBLE
 
   return (
     <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4">
-      <div className="flex items-center justify-between mb-[10px]">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
         <p
           className="text-[10px] uppercase text-[#7d8590] font-mono"
           style={{ letterSpacing: '0.08em' }}
@@ -130,28 +144,29 @@ export default function AllocationWidget({ loading, holdings }) {
       </div>
 
       {loading ? (
-        <Skeleton className="h-[120px]" />
-      ) : data.length === 0 ? (
+        <Skeleton className="h-[180px]" />
+      ) : donutData.length === 0 ? (
         <div className="min-h-[80px] flex items-center justify-center text-xs text-[#7d8590]">
           No holdings yet.
         </div>
       ) : (
-        <div className="flex flex-col items-center">
-          <div className="flex-shrink-0" style={{ width: 140, height: 140 }}>
+        <div className="flex flex-col items-center gap-3">
+          {/* Donut — centered, 120px */}
+          <div style={{ width: 120, height: 120, flexShrink: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={data}
+                  data={donutData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={36}
-                  outerRadius={62}
+                  innerRadius={30}
+                  outerRadius={54}
                   paddingAngle={2}
                   dataKey="value"
                   strokeWidth={0}
                 >
-                  {data.map((d, i) => (
-                    <Cell key={i} fill={useClassColors ? (CLASS_COLORS[d.ticker] ?? SLICE_COLORS[i % SLICE_COLORS.length]) : SLICE_COLORS[i % SLICE_COLORS.length]} />
+                  {donutData.map((d, i) => (
+                    <Cell key={i} fill={d.color} />
                   ))}
                   <Label
                     content={({ viewBox }) => {
@@ -163,7 +178,7 @@ export default function AllocationWidget({ loading, holdings }) {
                           textAnchor="middle"
                           dominantBaseline="middle"
                           fill="#e6edf3"
-                          fontSize={11}
+                          fontSize={10}
                           fontFamily="monospace"
                         >
                           {fmtCompact(total)}
@@ -178,7 +193,7 @@ export default function AllocationWidget({ loading, holdings }) {
                     const d = payload[0].payload
                     return (
                       <div className="bg-[#161b22] border border-[#21262d] rounded px-2 py-1">
-                        <p className="font-mono text-xs text-[#10b981]">{d.ticker}</p>
+                        <p className="font-mono text-xs" style={{ color: d.color }}>{d.label}</p>
                         <p className="font-mono text-xs text-[#e6edf3]">{d.pct.toFixed(1)}%</p>
                       </div>
                     )
@@ -188,38 +203,39 @@ export default function AllocationWidget({ loading, holdings }) {
             </ResponsiveContainer>
           </div>
 
-          <div className="flex flex-col gap-1.5 w-full mt-3">
-            {data.map((d, i) => {
-              const color = useClassColors
-                ? (CLASS_COLORS[d.ticker] ?? SLICE_COLORS[i % SLICE_COLORS.length])
-                : SLICE_COLORS[i % SLICE_COLORS.length]
-              return (
-              <div key={d.ticker} className="flex items-center gap-2 px-1">
+          {/* Legend — single column below donut */}
+          <div className="flex flex-col gap-[5px] w-full" style={{ minWidth: 200 }}>
+            {visibleLegend.map((d) => (
+              <div key={d.label + d.value} className="flex items-center gap-2">
                 <span
                   style={{
-                    width: 8,
-                    height: 8,
+                    width: 7,
+                    height: 7,
                     borderRadius: '50%',
                     flexShrink: 0,
-                    background: color,
+                    background: d.color,
                   }}
                 />
                 <span
-                  className="font-mono text-[11px] truncate"
-                  style={{ minWidth: 0, maxWidth: 80, color: color }}
-                  title={d.ticker}
+                  className="font-mono flex-1 truncate"
+                  style={{ fontSize: 11, color: d.color, minWidth: 0 }}
+                  title={d.fullLabel}
                 >
-                  {d.ticker}
+                  {d.label}
                 </span>
-                <span className="font-mono text-[11px] text-[#e6edf3] flex-1 text-right">
+                <span
+                  className="font-mono text-[#7d8590]"
+                  style={{ fontSize: 11, flexShrink: 0, width: 40, textAlign: 'right' }}
+                >
                   {d.pct.toFixed(1)}%
                 </span>
-                <span className="font-mono text-[10px] text-[#7d8590] w-14 text-right">
-                  {fmt(d.value)}
-                </span>
               </div>
-              )
-            })}
+            ))}
+            {hiddenCount > 0 && (
+              <p className="font-mono text-[10px] text-[#7d8590] pl-4">
+                +{hiddenCount} more
+              </p>
+            )}
           </div>
         </div>
       )}

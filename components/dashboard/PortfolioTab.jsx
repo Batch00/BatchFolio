@@ -258,34 +258,47 @@ export default function PortfolioTab({ onOpenDrawer }) {
 
   // Allocation data - by ticker or by asset class
   const allocationSource = sorted.filter((r) => r.value > 0)
-  let allocationData
-  let allocUseClassColors = false
+  let allocLegend = []  // shown in legend (individual items)
+  let allocDonut = []   // used for pie chart (CASH grouped into one slice)
+
   if (allocView === 'class') {
-    allocUseClassColors = true
     const classMap = {}
     allocationSource.forEach((r) => {
       const cls = getAssetClass(r.ticker, r.description)
       classMap[cls] = (classMap[cls] || 0) + r.value
     })
-    allocationData = Object.entries(classMap)
-      .map(([ticker, value]) => ({
-        ticker,
+    allocLegend = Object.entries(classMap)
+      .map(([label, value]) => ({
+        label,
+        fullLabel: label,
         value,
         pct: totalValue > 0 ? (value / totalValue) * 100 : 0,
+        color: CLASS_COLORS[label] ?? COLORS[0],
       }))
       .sort((a, b) => b.value - a.value)
+    allocDonut = allocLegend
   } else {
-    allocationData = allocationSource.slice(0, 8).map((r) => {
-      // Use displayName for CASH, description for fund names, ticker as fallback
-      const label = r.displayName
-        || (r.description ? r.description.substring(0, 20) : null)
-        || r.ticker
+    let colorIdx = 0
+    allocLegend = allocationSource.map((r) => {
+      const isCash = r.ticker === 'CASH'
+      const fullLabel = r.displayName || r.description || r.ticker
+      const label = fullLabel.length > 22 ? fullLabel.substring(0, 22) : fullLabel
       return {
-        ticker: label,
+        label,
+        fullLabel,
+        origTicker: r.ticker,
         value: r.value,
         pct: totalValue > 0 ? (r.value / totalValue) * 100 : 0,
+        color: isCash ? '#6b7280' : COLORS[colorIdx++ % COLORS.length],
       }
     })
+    // Group all CASH items into one donut slice
+    const cashTotal = allocLegend.filter((d) => d.origTicker === 'CASH').reduce((s, d) => s + d.value, 0)
+    const nonCash = allocLegend.filter((d) => d.origTicker !== 'CASH')
+    const cashPct = totalValue > 0 ? (cashTotal / totalValue) * 100 : 0
+    allocDonut = cashTotal > 0
+      ? [...nonCash, { label: 'Cash', fullLabel: 'Cash', origTicker: 'CASH', value: cashTotal, pct: cashPct, color: '#6b7280' }]
+      : nonCash
   }
 
   return (
@@ -365,7 +378,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
       )}
 
       {/* Allocation donut */}
-      {!loading && allocationData.length > 0 && (
+      {!loading && allocDonut.length > 0 && (
         <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4">
           <div className="flex items-center justify-between mb-3">
             <p className="text-[10px] uppercase tracking-widest text-[#7d8590] font-mono">
@@ -386,8 +399,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                     padding: '2px 6px',
                     borderRadius: 3,
                     border: `1px solid ${allocView === opt.id ? '#10b981' : '#21262d'}`,
-                    background:
-                      allocView === opt.id ? 'rgba(16,185,129,0.12)' : 'transparent',
+                    background: allocView === opt.id ? 'rgba(16,185,129,0.12)' : 'transparent',
                     color: allocView === opt.id ? '#10b981' : '#7d8590',
                   }}
                 >
@@ -396,56 +408,78 @@ export default function PortfolioTab({ onOpenDrawer }) {
               ))}
             </div>
           </div>
-          <div className="flex items-center gap-6 flex-wrap">
-            <ResponsiveContainer width={160} height={160}>
-              <PieChart>
-                <Pie
-                  data={allocationData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={45}
-                  outerRadius={72}
-                  paddingAngle={2}
-                  dataKey="value"
-                  strokeWidth={0}
-                >
-                  {allocationData.map((d, i) => (
-                    <Cell key={i} fill={allocUseClassColors ? (CLASS_COLORS[d.ticker] ?? COLORS[i % COLORS.length]) : COLORS[i % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null
-                    const d = payload[0].payload
-                    return (
-                      <div className="bg-[#161b22] border border-[#21262d] rounded px-2 py-1">
-                        <p className="font-mono text-xs text-[#10b981]">{d.ticker}</p>
-                        <p className="font-mono text-xs text-[#e6edf3]">{d.pct.toFixed(1)}%</p>
-                      </div>
-                    )
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
-              {allocationData.map((d, i) => {
-                const color = allocUseClassColors ? (CLASS_COLORS[d.ticker] ?? COLORS[i % COLORS.length]) : COLORS[i % COLORS.length]
-                return (
-                <div key={d.ticker} className="flex items-center gap-2">
+
+          <div className="flex items-start gap-4">
+            {/* Donut: fixed 140px, uses grouped data */}
+            <div style={{ width: 140, height: 140, flexShrink: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={allocDonut}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={38}
+                    outerRadius={62}
+                    paddingAngle={2}
+                    dataKey="value"
+                    strokeWidth={0}
+                  >
+                    {allocDonut.map((d, i) => (
+                      <Cell key={i} fill={d.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const d = payload[0].payload
+                      return (
+                        <div className="bg-[#161b22] border border-[#21262d] rounded px-2 py-1">
+                          <p className="font-mono text-xs" style={{ color: d.color }}>{d.label}</p>
+                          <p className="font-mono text-xs text-[#e6edf3]">{d.pct.toFixed(1)}%</p>
+                        </div>
+                      )
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Legend: single column, full remaining width, scrollable if long */}
+            <div
+              className="flex flex-col gap-[6px] flex-1 min-w-0"
+              style={{
+                maxHeight: 200,
+                overflowY: 'auto',
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#21262d #0d1117',
+              }}
+            >
+              {allocLegend.map((d) => (
+                <div key={d.label + d.value} className="flex items-center gap-2 min-w-0">
                   <span
-                    className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ background: color }}
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: '50%',
+                      flexShrink: 0,
+                      background: d.color,
+                    }}
                   />
                   <span
-                    className="font-mono text-xs text-[#10b981] w-12 truncate"
-                    title={d.ticker}
+                    className="font-mono flex-1 truncate"
+                    style={{ fontSize: 11, color: d.color, minWidth: 0 }}
+                    title={d.fullLabel}
                   >
-                    {d.ticker}
+                    {d.label}
                   </span>
-                  <span className="font-mono text-xs text-[#7d8590]">{d.pct.toFixed(1)}%</span>
+                  <span
+                    className="font-mono text-[#7d8590]"
+                    style={{ fontSize: 11, flexShrink: 0, width: 42, textAlign: 'right' }}
+                  >
+                    {d.pct.toFixed(1)}%
+                  </span>
                 </div>
-                )
-              })}
+              ))}
             </div>
           </div>
         </div>
