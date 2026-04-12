@@ -16,12 +16,12 @@ function detectAccountType(name: string, orgName?: string): string {
   const lower = (name || '').toLowerCase()
   const org = (orgName || '').toLowerCase()
 
-  if (/401k|401\(k\)|ira|roth|retirement|pension|403b|457/.test(lower)) return 'retirement'
+  if (/401k|401\(k\)|ira|roth|retirement|pension|403b|457|hsa|health savings|sep|simple ira|annuity|profit sharing/.test(lower)) return 'retirement'
 
   if (/checking|savings|chequing|money market|mmda|share draft|deposit/.test(lower)) return 'bank'
 
-  if (/chase|bank of america|wells fargo|citibank|us bank|pnc|td bank|capital one|horicon|community bank|credit union|national bank/.test(org)) {
-    if (!/brokerage|investment|trading|portfolio/.test(lower)) return 'bank'
+  if (/horicon|community bank|credit union|chase bank|bank of america|wells fargo|citibank|us bank|pnc|td bank|capital one/.test(org)) {
+    if (!/brokerage|investment|trading|ira|401/.test(lower)) return 'bank'
   }
 
   return 'brokerage'
@@ -149,15 +149,17 @@ async function syncSimpleFINForUser(
       // Preserve user-edited names: check before update, never overwrite name
       const { data: existingAcc } = await supabase
         .from('accounts')
-        .select('id')
+        .select('id, type')
         .eq('user_id', uid)
         .eq('simplefin_id', sfAcc.id)
         .maybeSingle()
 
+      const newType = detectAccountType(sfAcc.name, sfAcc.org?.name)
       let accountId: string | null = null
 
       if (existingAcc) {
         // Update balance fields only - preserve user-edited name
+        // Also update type if it was auto-detected as brokerage but new detection says otherwise
         await supabase
           .from('accounts')
           .update({
@@ -166,6 +168,7 @@ async function syncSimpleFINForUser(
             currency,
             last_balance_date: lastBalanceDate,
             is_synced: true,
+            ...((existingAcc as { type?: string }).type === 'brokerage' && newType !== 'brokerage' ? { type: newType } : {}),
           })
           .eq('id', existingAcc.id)
         accountId = existingAcc.id
@@ -177,7 +180,7 @@ async function syncSimpleFINForUser(
             user_id: uid,
             name: sfAcc.name,
             provider: sfAcc.org?.name ?? 'SimpleFIN',
-            type: detectAccountType(sfAcc.name, sfAcc.org?.name),
+            type: newType,
             simplefin_id: sfAcc.id,
             is_synced: true,
             balance: balanceNum,

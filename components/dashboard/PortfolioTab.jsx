@@ -157,10 +157,16 @@ export default function PortfolioTab({ onOpenDrawer }) {
       }
     })
 
-    // Merge duplicate tickers across accounts
+    // Merge duplicate tickers across accounts (CASH rows stay separate per account)
     const mergedMap = {}
     for (const h of enriched) {
-      if (mergedMap[h.ticker]) {
+      if (h.ticker === 'CASH') {
+        const key = `CASH-${h.account_id}`
+        mergedMap[key] = {
+          ...h,
+          displayName: `Cash (${h.account})`,
+        }
+      } else if (mergedMap[h.ticker]) {
         const ex = mergedMap[h.ticker]
         const totalShares = ex.shares + h.shares
         const totalValue = (ex.value ?? 0) + (h.value ?? 0)
@@ -278,7 +284,15 @@ export default function PortfolioTab({ onOpenDrawer }) {
 
       {/* Account filter pills */}
       {!loading && accounts.length > 1 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div
+          className="flex gap-1.5"
+          style={{
+            overflowX: 'auto',
+            whiteSpace: 'nowrap',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+          }}
+        >
           <button
             onClick={() => setSelectedAccountId(null)}
             className="font-mono transition-colors"
@@ -302,7 +316,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
               onClick={() =>
                 setSelectedAccountId(selectedAccountId === acc.id ? null : acc.id)
               }
-              className="font-mono transition-colors"
+              className="font-mono transition-colors flex-shrink-0"
               style={{
                 fontSize: 10,
                 letterSpacing: '0.04em',
@@ -312,14 +326,14 @@ export default function PortfolioTab({ onOpenDrawer }) {
                 background:
                   selectedAccountId === acc.id ? 'rgba(16,185,129,0.12)' : 'transparent',
                 color: selectedAccountId === acc.id ? '#10b981' : '#7d8590',
-                whiteSpace: 'nowrap',
-                maxWidth: 160,
+                maxWidth: 120,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}
               title={acc.name}
             >
-              {acc.name.length > 14 ? acc.name.slice(0, 14) + '...' : acc.name.toUpperCase()}
+              {acc.name.toUpperCase()}
             </button>
           ))}
         </div>
@@ -460,12 +474,14 @@ export default function PortfolioTab({ onOpenDrawer }) {
                       : null
                     return (
                       <tr
-                        key={h.id}
+                        key={h.id ?? `${h.ticker}-${h.account_id}`}
                         className="border-b border-[#21262d] hover:bg-[#0d1117] transition-colors cursor-pointer"
-                        onClick={() => onOpenDrawer(h.ticker)}
+                        onClick={() => h.ticker !== 'CASH' && onOpenDrawer(h.ticker)}
                       >
                         <td className="px-3 py-2.5">
-                          {primaryLabel ? (
+                          {h.displayName ? (
+                            <span className="font-mono text-xs text-[#7d8590]">{h.displayName}</span>
+                          ) : primaryLabel ? (
                             <>
                               <p
                                 className="text-xs text-[#e6edf3] truncate"

@@ -37,7 +37,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
       supabase.from('holdings').select('*'),
       supabase.from('watchlist').select('*').order('added_at', { ascending: false }),
       supabase.from('liabilities').select('balance'),
-      supabase.from('accounts').select('id, is_synced, balance, is_excluded'),
+      supabase.from('accounts').select('id, name, is_synced, balance, is_excluded'),
     ])
 
     if (snapshotsRes.error) {
@@ -94,8 +94,16 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     })
     const priceMap = { ...syncedPriceMap, ...liveQuoteMap }
 
+    const accountNameMap = {}
+    ;(accountsRes.data ?? []).forEach((a) => { accountNameMap[a.id] = a.name })
+
+    // Annotate CASH holdings with account name
+    const annotatedHoldings = allHoldings.map((h) =>
+      h.ticker === 'CASH' ? { ...h, _accountName: accountNameMap[h.account_id] ?? '' } : h
+    )
+
     setSnapshots(snapshotsRes.data ?? [])
-    setHoldings(allHoldings)
+    setHoldings(annotatedHoldings)
     setPrices(priceMap)
     setWatchlist(wlItems)
     setLiveLiabilities(liabRes.data ?? [])
@@ -247,10 +255,12 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   const { changeDollar, changePct } = getChangeForRange()
   const changePositive = changeDollar >= 0
 
-  // Merge duplicate tickers before enrichment
+  // Merge duplicate tickers before enrichment (CASH rows stay separate per account)
   const mergedHoldingsMap = {}
   for (const h of holdings) {
-    if (mergedHoldingsMap[h.ticker]) {
+    if (h.ticker === 'CASH') {
+      mergedHoldingsMap[`CASH-${h.account_id}`] = { ...h }
+    } else if (mergedHoldingsMap[h.ticker]) {
       const ex = mergedHoldingsMap[h.ticker]
       const totalShares = ex.shares + h.shares
       const exCBT = ex.cost_basis_total || ex.shares * ex.avg_cost_basis
@@ -270,6 +280,20 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
 
   const enrichedHoldings = mergedHoldings
     .map((h) => {
+      if (h.ticker === 'CASH') {
+        return {
+          ...h,
+          livePrice: h.avg_cost_basis,
+          value: h.avg_cost_basis,
+          costBasis: h.avg_cost_basis,
+          gainLoss: 0,
+          gainPct: 0,
+          positive: true,
+          hasPrice: true,
+          name: '',
+          description: h._accountName ? `Cash - ${h._accountName}` : 'Cash Balance',
+        }
+      }
       const hasPrice = prices[h.ticker]?.price != null && prices[h.ticker].price > 0
       const livePrice = hasPrice ? prices[h.ticker].price : null
       const value = hasPrice ? h.shares * livePrice : null

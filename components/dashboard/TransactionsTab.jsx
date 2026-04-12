@@ -70,6 +70,7 @@ export default function TransactionsTab() {
 
   const [transactions, setTransactions] = useState([])
   const [accounts, setAccounts] = useState([])
+  const [syncedLiabilities, setSyncedLiabilities] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -96,8 +97,12 @@ export default function TransactionsTab() {
     const fromDate = new Date()
     fromDate.setDate(fromDate.getDate() - rangeDays)
 
-    const [accsRes, txRes] = await Promise.all([
+    // Determine if the selected filter is a liability (credit card)
+    const isLiabilityFilter = selectedAccount.startsWith('liability:')
+
+    const [accsRes, liabsRes, txRes] = await Promise.all([
       supabase.from('accounts').select('id, name').order('created_at', { ascending: false }),
+      supabase.from('liabilities').select('id, name, simplefin_id').eq('user_id', user.id).not('simplefin_id', 'is', null).order('name'),
       (() => {
         let q = supabase
           .from('transactions')
@@ -105,7 +110,9 @@ export default function TransactionsTab() {
           .eq('user_id', user.id)
           .gte('posted_at', fromDate.toISOString())
           .order('posted_at', { ascending: false })
-        if (selectedAccount !== 'all') {
+        // Credit card transactions need a liability_id column migration to filter properly
+        // For now, only filter by account_id for regular accounts
+        if (selectedAccount !== 'all' && !isLiabilityFilter) {
           q = q.eq('account_id', selectedAccount)
         }
         return q
@@ -118,6 +125,7 @@ export default function TransactionsTab() {
       setTransactions(txRes.data ?? [])
     }
     setAccounts(accsRes.data ?? [])
+    setSyncedLiabilities(liabsRes.data ?? [])
     setLoading(false)
   }, [dateRange, selectedAccount])
 
@@ -205,6 +213,21 @@ export default function TransactionsTab() {
                   {a.name}
                 </SelectItem>
               ))}
+              {syncedLiabilities.length > 0 && (
+                <>
+                  <div
+                    className="px-2 py-1.5 font-mono"
+                    style={{ fontSize: 9, color: '#7d8590', letterSpacing: '0.06em', textTransform: 'uppercase' }}
+                  >
+                    Credit Cards
+                  </div>
+                  {syncedLiabilities.map((l) => (
+                    <SelectItem key={l.id} value={`liability:${l.id}`} className="text-xs">
+                      {l.name}
+                    </SelectItem>
+                  ))}
+                </>
+              )}
             </SelectContent>
           </Select>
           <Input

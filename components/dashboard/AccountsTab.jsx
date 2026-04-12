@@ -76,7 +76,7 @@ function typeBadge(type) {
 function SortableAccountRow({
   acc, holdings, prices, expanded, toggleExpand, accountTotal, fmtBalanceDate,
   openEditAccount, deleteAccount, toggleExclude, openAddHolding, openEditHolding,
-  deleteHolding, onOpenDrawer, isDemo,
+  deleteHolding, onOpenDrawer, isDemo, isDuplicate,
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: acc.id })
   const style = {
@@ -156,6 +156,25 @@ function SortableAccountRow({
                   SYNCED
                 </span>
               ) : null}
+              {isDuplicate && (
+                <span
+                  title="This account may duplicate a synced account. Consider deleting it."
+                  style={{
+                    background: 'rgba(251,191,36,0.1)',
+                    color: '#fbbf24',
+                    fontSize: 9,
+                    letterSpacing: '0.06em',
+                    padding: '1px 5px',
+                    borderRadius: 3,
+                    fontFamily: 'monospace',
+                    textTransform: 'uppercase',
+                    flexShrink: 0,
+                    cursor: 'help',
+                  }}
+                >
+                  DUPLICATE
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-xs text-[#7d8590]">{acc.provider}</span>
@@ -570,9 +589,9 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     if (isDemo) { onDemoBlock?.(); return }
     setEditAccSaving(true)
     setEditAccError(null)
-    // Synced accounts: only name is user-editable; provider/type come from SimpleFIN
+    // Synced accounts: name and type are user-editable; provider comes from SimpleFIN
     const updatePayload = editAccIsSynced
-      ? { name: editAccName.trim() }
+      ? { name: editAccName.trim(), type: editAccType }
       : { name: editAccName.trim(), provider: editAccProvider.trim(), type: editAccType }
     const { error: err } = await supabase
       .from('accounts')
@@ -763,6 +782,17 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
 
   const liabTotal = liabilities.reduce((s, l) => s + l.balance, 0)
 
+  // Detect duplicate providers
+  const providerCounts = {}
+  accounts.forEach((a) => {
+    if (a.provider) providerCounts[a.provider] = (providerCounts[a.provider] || 0) + 1
+  })
+  const duplicateProviders = new Set(
+    Object.entries(providerCounts)
+      .filter(([, count]) => count > 1)
+      .map(([provider]) => provider)
+  )
+
   return (
     <div className="p-4 space-y-6">
       {/* Demo read-only banner */}
@@ -835,6 +865,7 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                     deleteHolding={deleteHolding}
                     onOpenDrawer={onOpenDrawer}
                     isDemo={isDemo}
+                    isDuplicate={!acc.is_synced && duplicateProviders.has(acc.provider)}
                   />
                 ))}
               </div>
@@ -1121,12 +1152,19 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Type</Label>
-                  <p className="text-sm text-[#e6edf3] capitalize px-3 py-2 bg-[#0d1117] rounded border border-[#21262d]">
-                    {editAccType}
-                  </p>
+                  <Select value={editAccType} onValueChange={setEditAccType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="brokerage">Brokerage</SelectItem>
+                      <SelectItem value="retirement">Retirement</SelectItem>
+                      <SelectItem value="bank">Bank Account</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <p style={{ fontSize: 11, color: '#7d8590' }}>
-                  Provider and type are managed by SimpleFIN sync
+                  Provider is managed by SimpleFIN sync
                 </p>
               </>
             ) : (

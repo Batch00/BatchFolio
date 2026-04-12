@@ -11,12 +11,12 @@ function detectAccountType(name, orgName) {
   const lower = (name || '').toLowerCase()
   const org = (orgName || '').toLowerCase()
 
-  if (/401k|401\(k\)|ira|roth|retirement|pension|403b|457/.test(lower)) return 'retirement'
+  if (/401k|401\(k\)|ira|roth|retirement|pension|403b|457|hsa|health savings|sep|simple ira|annuity|profit sharing/.test(lower)) return 'retirement'
 
   if (/checking|savings|chequing|money market|mmda|share draft|deposit/.test(lower)) return 'bank'
 
-  if (/chase|bank of america|wells fargo|citibank|us bank|pnc|td bank|capital one|horicon|community bank|credit union|national bank/.test(org)) {
-    if (!/brokerage|investment|trading|portfolio/.test(lower)) return 'bank'
+  if (/horicon|community bank|credit union|chase bank|bank of america|wells fargo|citibank|us bank|pnc|td bank|capital one/.test(org)) {
+    if (!/brokerage|investment|trading|ira|401/.test(lower)) return 'bank'
   }
 
   return 'brokerage'
@@ -155,7 +155,7 @@ export async function POST() {
       // update provider/type/is_synced on subsequent syncs without touching name.
       const { data: existingAcc } = await supabase
         .from('accounts')
-        .select('id')
+        .select('id, type')
         .eq('user_id', user.id)
         .eq('simplefin_id', sfAcc.id)
         .maybeSingle()
@@ -166,6 +166,7 @@ export async function POST() {
       const lastBalanceDate = sfAcc['balance-date']
         ? new Date(sfAcc['balance-date'] * 1000).toISOString()
         : null
+      const newType = detectAccountType(sfAcc.name, sfAcc.org?.name)
 
       let accountId
       if (existingAcc) {
@@ -173,12 +174,13 @@ export async function POST() {
           .from('accounts')
           .update({
             provider: sfAcc.org?.name ?? 'SimpleFIN',
-            type: detectAccountType(sfAcc.name, sfAcc.org?.name),
             is_synced: true,
             balance: balanceNum,
             available_balance: availableBalanceNum,
             currency,
             last_balance_date: lastBalanceDate,
+            // Update type if it was auto-detected as brokerage but new detection says otherwise
+            ...(existingAcc.type === 'brokerage' && newType !== 'brokerage' ? { type: newType } : {}),
           })
           .eq('id', existingAcc.id)
         accountId = existingAcc.id
@@ -189,7 +191,7 @@ export async function POST() {
             user_id: user.id,
             name: sfAcc.name,
             provider: sfAcc.org?.name ?? 'SimpleFIN',
-            type: detectAccountType(sfAcc.name, sfAcc.org?.name),
+            type: newType,
             simplefin_id: sfAcc.id,
             is_synced: true,
             balance: balanceNum,
