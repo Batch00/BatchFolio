@@ -36,6 +36,9 @@ export default function NetWorthWidget({
   range,
   onRangeChange,
 }) {
+  const totalGain = (totalAssets ?? 0) - (totalLiabilities ?? 0) - (totalInvested ?? 0)
+  const gainPositive = totalGain >= 0
+
   return (
     <div className="bg-[#161b22] border border-[#10b981]/40 rounded-md p-4 h-full flex flex-col">
       <p
@@ -53,6 +56,7 @@ export default function NetWorthWidget({
             {[0, 1, 2].map((i) => (
               <Skeleton key={i} className="h-12 flex-1" />
             ))}
+            <Skeleton className="h-12 flex-1 hidden sm:block" />
           </div>
           <Skeleton className="h-6 w-40" />
         </>
@@ -81,7 +85,7 @@ export default function NetWorthWidget({
           </p>
 
           <div className="flex gap-2 mb-4">
-            <div className="bg-[#0d1117] rounded px-2.5 py-2 flex-1">
+            <div className="bg-[#0d1117] rounded px-2.5 py-2 flex-1" title="Current market value of all your accounts">
               <p
                 className="uppercase tracking-wider text-[#7d8590] mb-1"
                 style={{ fontSize: 9 }}
@@ -92,7 +96,7 @@ export default function NetWorthWidget({
                 {fmtCompact(totalAssets)}
               </p>
             </div>
-            <div className="bg-[#0d1117] rounded px-2.5 py-2 flex-1">
+            <div className="bg-[#0d1117] rounded px-2.5 py-2 flex-1" title="Total outstanding debt and credit balances">
               <p
                 className="uppercase tracking-wider text-[#7d8590] mb-1"
                 style={{ fontSize: 9 }}
@@ -103,15 +107,32 @@ export default function NetWorthWidget({
                 {fmtCompact(totalLiabilities)}
               </p>
             </div>
-            <div className="bg-[#0d1117] rounded px-2.5 py-2 flex-1">
+            <div className="bg-[#0d1117] rounded px-2.5 py-2 flex-1" title="Total amount you paid for your current holdings">
               <p
                 className="uppercase tracking-wider text-[#7d8590] mb-1"
                 style={{ fontSize: 9 }}
               >
-                Invested
+                Cost Basis
               </p>
               <p className="font-mono text-[13px] text-[#e6edf3]">
                 {fmtCompact(totalInvested)}
+              </p>
+            </div>
+            <div
+              className="bg-[#0d1117] rounded px-2.5 py-2 flex-1 hidden sm:block"
+              title="Unrealized gain or loss across all holdings"
+            >
+              <p
+                className="uppercase tracking-wider text-[#7d8590] mb-1"
+                style={{ fontSize: 9 }}
+              >
+                Total Gain
+              </p>
+              <p
+                className="font-mono text-[13px]"
+                style={{ color: gainPositive ? '#34d399' : '#f87171' }}
+              >
+                {totalInvested ? (gainPositive ? '+' : '') + fmtCompact(totalGain) : '--'}
               </p>
             </div>
           </div>

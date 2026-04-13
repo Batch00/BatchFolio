@@ -351,7 +351,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
         {loading ? (
           <Skeleton className="h-8 w-36 inline-block" />
         ) : (
-          <p className="font-mono text-2xl font-semibold text-[#e6edf3]">{fmt(totalValue)}</p>
+          <p className="font-mono text-2xl font-semibold text-[#e6edf3]">{fmt(totalAssets)}</p>
         )}
       </div>
 
@@ -450,7 +450,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                 </div>
               </div>
 
-              <div className="flex items-start gap-4">
+              <div className="flex items-start gap-4" style={{ minWidth: 0 }}>
                 {/* Donut: fixed 160px */}
                 <div style={{ width: 160, height: 160, flexShrink: 0 }}>
                   <ResponsiveContainer width="100%" height="100%">
