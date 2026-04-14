@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Skeleton } from '@/components/ui/skeleton'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { ChevronUp, ChevronDown } from 'lucide-react'
 import Sparkline from '@/components/dashboard/Sparkline'
 
@@ -452,51 +452,46 @@ export default function PortfolioTab({ onOpenDrawer }) {
 
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, width: '100%', minWidth: 0, overflow: 'hidden' }}>
                 {/* Donut: fixed width, never grows */}
-                <div style={{ width: 160, height: 160, flexShrink: 0 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={allocDonut}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={45}
-                        outerRadius={70}
-                        paddingAngle={2}
-                        dataKey="value"
-                        strokeWidth={0}
-                      >
-                        {allocDonut.map((d, i) => (
-                          <Cell key={i} fill={d.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        content={({ active, payload }) => {
-                          if (!active || !payload?.length) return null
-                          const d = payload[0].payload
-                          return (
-                            <div className="bg-[#161b22] border border-[#21262d] rounded px-2 py-1">
-                              <p className="font-mono text-xs" style={{ color: d.color }}>{d.label}</p>
-                              <p className="font-mono text-xs text-[#e6edf3]">{d.pct.toFixed(1)}%</p>
-                            </div>
-                          )
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
+                <div style={{ width: 180, height: 180, flexShrink: 0 }}>
+                  <PieChart width={180} height={180}>
+                    <Pie
+                      data={allocDonut}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={52}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="value"
+                      strokeWidth={0}
+                    >
+                      {allocDonut.map((d, i) => (
+                        <Cell key={i} fill={d.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null
+                        const d = payload[0].payload
+                        return (
+                          <div className="bg-[#161b22] border border-[#21262d] rounded px-2 py-1">
+                            <p className="font-mono text-xs" style={{ color: d.color }}>{d.label}</p>
+                            <p className="font-mono text-xs text-[#e6edf3]">{d.pct.toFixed(1)}%</p>
+                          </div>
+                        )
+                      }}
+                    />
+                  </PieChart>
                 </div>
 
-                {/* Legend: takes remaining space but cannot overflow */}
-                <div style={{ flex: 1, minWidth: 0, width: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 220, overflowY: 'auto', paddingRight: 4 }}>
+                {/* Legend: fixed width grid layout */}
+                <div style={{ width: 260, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 220, overflowY: 'auto', overflowX: 'hidden' }}>
                   {allocLegend.map((d, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, overflow: 'hidden' }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
-                      <span
-                        style={{ flex: 1, minWidth: 0, fontSize: 11, color: '#e6edf3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-                        title={d.fullLabel}
-                      >
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '10px 1fr 36px', alignItems: 'center', gap: 6 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color }} />
+                      <span style={{ fontSize: 11, color: '#e6edf3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={d.fullLabel}>
                         {d.fullLabel}
                       </span>
-                      <span style={{ flexShrink: 0, fontSize: 11, fontFamily: 'monospace', color: '#7d8590', paddingLeft: 8 }}>
+                      <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#7d8590', textAlign: 'right' }}>
                         {d.pct.toFixed(1)}%
                       </span>
                     </div>
