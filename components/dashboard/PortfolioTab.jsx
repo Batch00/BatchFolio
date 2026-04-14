@@ -450,8 +450,8 @@ export default function PortfolioTab({ onOpenDrawer }) {
                 </div>
               </div>
 
-              <div className="flex items-start gap-4" style={{ minWidth: 0 }}>
-                {/* Donut: fixed 160px */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, minWidth: 0, overflow: 'hidden' }}>
+                {/* Donut: fixed width, never grows */}
                 <div style={{ width: 160, height: 160, flexShrink: 0 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -485,18 +485,18 @@ export default function PortfolioTab({ onOpenDrawer }) {
                   </ResponsiveContainer>
                 </div>
 
-                {/* Legend: single column, scrollable */}
-                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 200, overflowY: 'auto', paddingRight: 4 }}>
+                {/* Legend: takes remaining space but cannot overflow */}
+                <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 220, overflowY: 'auto', paddingRight: 4 }}>
                   {allocLegend.map((d, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, overflow: 'hidden' }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
                       <span
                         style={{ flex: 1, minWidth: 0, fontSize: 11, color: '#e6edf3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
                         title={d.fullLabel}
                       >
-                        {d.fullLabel.length > 22 ? d.fullLabel.substring(0, 22) + '...' : d.fullLabel}
+                        {d.fullLabel}
                       </span>
-                      <span style={{ flexShrink: 0, width: 40, textAlign: 'right', fontSize: 11, fontFamily: 'monospace', color: '#7d8590' }}>
+                      <span style={{ flexShrink: 0, fontSize: 11, fontFamily: 'monospace', color: '#7d8590', paddingLeft: 8 }}>
                         {d.pct.toFixed(1)}%
                       </span>
                     </div>
