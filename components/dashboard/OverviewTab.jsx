@@ -72,10 +72,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     )
     const tickersNeedingQuotes = [
       ...new Set([
-        ...manualHoldings.map((h) => h.ticker),
-        ...syncedHoldings
-          .filter((h) => !h.last_synced_price || h.last_synced_price <= 0)
-          .map((h) => h.ticker),
+        ...allHoldings.map((h) => h.ticker),
         ...wlTickers,
       ]),
     ].filter((t) => t !== 'CASH')
