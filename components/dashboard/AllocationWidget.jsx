@@ -104,7 +104,7 @@ export default function AllocationWidget({ loading, holdings }) {
   }
 
   return (
-    <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4 h-full" style={{ display: 'flex', flexDirection: 'column' }}>
+    <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4" style={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <p
@@ -197,7 +197,7 @@ export default function AllocationWidget({ loading, holdings }) {
           </div>
 
           {/* Legend */}
-          <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'hidden', paddingRight: 14, display: 'flex', flexDirection: 'column', gap: 5, minHeight: 0 }}>
+          <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'hidden', paddingRight: 14, display: 'flex', flexDirection: 'column', gap: 5, minHeight: 0, maxHeight: 320 }}>
             {legendData.map((d, i) => (
               <div key={i} style={{ display: 'grid', gridTemplateColumns: '10px 1fr 42px', alignItems: 'center', gap: 6 }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color }} />
