@@ -486,38 +486,17 @@ export default function PortfolioTab({ onOpenDrawer }) {
                 </div>
 
                 {/* Legend: single column, scrollable */}
-                <div
-                  className="flex flex-col gap-[5px] flex-1 min-w-0"
-                  style={{
-                    maxHeight: 200,
-                    overflowY: 'auto',
-                    paddingRight: 4,
-                    scrollbarWidth: 'thin',
-                    scrollbarColor: '#21262d #0d1117',
-                  }}
-                >
-                  {allocLegend.map((d) => (
-                    <div key={d.label + d.value} className="flex items-center gap-[6px] min-w-0">
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 200, overflowY: 'auto', paddingRight: 4 }}>
+                  {allocLegend.map((d, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
                       <span
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          flexShrink: 0,
-                          background: d.color,
-                        }}
-                      />
-                      <span
-                        className="font-mono flex-1 truncate"
-                        style={{ fontSize: 11, color: '#e6edf3', minWidth: 0 }}
+                        style={{ flex: 1, minWidth: 0, fontSize: 11, color: '#e6edf3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
                         title={d.fullLabel}
                       >
-                        {d.label}
+                        {d.fullLabel.length > 22 ? d.fullLabel.substring(0, 22) + '...' : d.fullLabel}
                       </span>
-                      <span
-                        className="font-mono text-[#7d8590]"
-                        style={{ fontSize: 11, flexShrink: 0, width: 40, textAlign: 'right' }}
-                      >
+                      <span style={{ flexShrink: 0, width: 40, textAlign: 'right', fontSize: 11, fontFamily: 'monospace', color: '#7d8590' }}>
                         {d.pct.toFixed(1)}%
                       </span>
                     </div>

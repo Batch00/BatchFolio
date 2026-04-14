@@ -39,8 +39,7 @@ async function syncSimpleFINForUser(
   supabase: ReturnType<typeof createClient>,
   uid: string,
 ): Promise<void> {
-  const { data: conn } = await supabase
-    .from('simplefin_connections')
+  const { data: conn } = await (supabase as any).schema('batchfolio').from('simplefin_connections')
     .select('access_url')
     .eq('user_id', uid)
     .maybeSingle()
@@ -69,7 +68,7 @@ async function syncSimpleFINForUser(
       'available-balance'?: string
       'balance-date'?: number
       currency?: string
-      org?: { name?: string }
+      org?: { name?: string; url?: string }
       holdings?: {
         id: string
         symbol: string
@@ -99,21 +98,19 @@ async function syncSimpleFINForUser(
         try {
           // 1. Upsert liability
           let liabilityId: string | null = null
-          const { data: existingLiab } = await supabase
-            .from('liabilities')
+          const { data: existingLiab } = await (supabase as any).schema('batchfolio').from('liabilities')
             .select('id')
             .eq('user_id', uid)
             .eq('simplefin_id', sfAcc.id)
             .maybeSingle()
 
           if (existingLiab) {
-            await supabase
-              .from('liabilities')
+            await (supabase as any).schema('batchfolio').from('liabilities')
               .update({ balance: balanceAbs, is_synced: true })
               .eq('id', existingLiab.id)
             liabilityId = existingLiab.id
           } else {
-            const { data: newLiab } = await supabase.from('liabilities').insert({
+            const { data: newLiab } = await (supabase as any).schema('batchfolio').from('liabilities').insert({
               user_id: uid,
               name: sfAcc.name,
               type: 'credit card',
@@ -126,22 +123,20 @@ async function syncSimpleFINForUser(
           }
 
           // 2. Delete any old non-shadow account for this SimpleFIN ID
-          const { data: existingCCAccount } = await supabase
-            .from('accounts')
+          const { data: existingCCAccount } = await (supabase as any).schema('batchfolio').from('accounts')
             .select('id')
             .eq('user_id', uid)
             .eq('simplefin_id', sfAcc.id)
             .maybeSingle()
 
           if (existingCCAccount) {
-            await supabase.from('holdings').delete().eq('account_id', existingCCAccount.id)
-            await supabase.from('accounts').delete().eq('id', existingCCAccount.id)
+            await (supabase as any).schema('batchfolio').from('holdings').delete().eq('account_id', existingCCAccount.id)
+            await (supabase as any).schema('batchfolio').from('accounts').delete().eq('id', existingCCAccount.id)
           }
 
           // 3. Upsert hidden shadow account to hold transactions
           if (liabilityId) {
-            const { data: shadowAcc } = await supabase
-              .from('accounts')
+            const { data: shadowAcc } = await (supabase as any).schema('batchfolio').from('accounts')
               .upsert(
                 {
                   user_id: uid,
@@ -167,7 +162,7 @@ async function syncSimpleFINForUser(
                 const amount = parseFloat(tx.amount ?? '0')
                 if (amount === 0 || isNaN(amount)) continue
 
-                await supabase.from('transactions').upsert(
+                await (supabase as any).schema('batchfolio').from('transactions').upsert(
                   {
                     account_id: shadowAcc.id,
                     liability_id: liabilityId,
@@ -201,8 +196,7 @@ async function syncSimpleFINForUser(
         : null
 
       // Preserve user-edited names: check before update, never overwrite name
-      const { data: existingAcc } = await supabase
-        .from('accounts')
+      const { data: existingAcc } = await (supabase as any).schema('batchfolio').from('accounts')
         .select('id, type')
         .eq('user_id', uid)
         .eq('simplefin_id', sfAcc.id)
@@ -214,8 +208,7 @@ async function syncSimpleFINForUser(
       if (existingAcc) {
         // Update balance fields only - preserve user-edited name
         // Also update type if it was auto-detected as brokerage but new detection says otherwise
-        await supabase
-          .from('accounts')
+        await (supabase as any).schema('batchfolio').from('accounts')
           .update({
             balance: balanceNum,
             available_balance: availableBalanceNum,
@@ -228,8 +221,7 @@ async function syncSimpleFINForUser(
         accountId = existingAcc.id
       } else {
         // New account - insert with name from SimpleFIN
-        const { data: newAcc } = await supabase
-          .from('accounts')
+        const { data: newAcc } = await (supabase as any).schema('batchfolio').from('accounts')
           .insert({
             user_id: uid,
             name: sfAcc.name,
@@ -272,7 +264,7 @@ async function syncSimpleFINForUser(
             ? mv / sh
             : (!isNaN(mv) && mv > 0 ? mv : null)
 
-          await supabase.from('holdings').upsert(
+          await (supabase as any).schema('batchfolio').from('holdings').upsert(
             {
               account_id: accountId,
               ticker: h.symbol,
@@ -291,7 +283,7 @@ async function syncSimpleFINForUser(
           )
         }
       } else if (sfAcc.balance != null) {
-        await supabase.from('holdings').upsert(
+        await (supabase as any).schema('batchfolio').from('holdings').upsert(
           {
             account_id: accountId,
             ticker: 'CASH',
@@ -312,7 +304,7 @@ async function syncSimpleFINForUser(
         const amount = parseFloat(tx.amount ?? '0')
         if (amount === 0 || isNaN(amount)) continue
 
-        await supabase.from('transactions').upsert(
+        await (supabase as any).schema('batchfolio').from('transactions').upsert(
           {
             account_id: accountId,
             user_id: uid,
@@ -335,8 +327,7 @@ async function syncSimpleFINForUser(
       }
     }
 
-    await supabase
-      .from('simplefin_connections')
+    await (supabase as any).schema('batchfolio').from('simplefin_connections')
       .update({ last_synced_at: new Date().toISOString() })
       .eq('user_id', uid)
   } catch {
@@ -348,8 +339,7 @@ Deno.serve(async () => {
   const supabase = createClient(
     Deno.env.get('APP_SUPABASE_URL')!,
     Deno.env.get('SERVICE_ROLE_KEY')!,
-    { db: { schema: 'batchfolio' } },
-  )
+  ) as any
 
   const finnhubKey = Deno.env.get('FINNHUB_API_KEY')!
   const today = new Date().toISOString().split('T')[0]
@@ -361,7 +351,7 @@ Deno.serve(async () => {
   }
 
   // Find demo user ID - check by email as fallback if DEMO_USER_ID env var is not set
-  const demoUserByEmail = userList.users.find((u) => u.email === 'demo@batchfolio.app')
+  const demoUserByEmail = userList.users.find((u: any) => u.email === 'demo@batchfolio.app')
   const DEMO_USER_ID = Deno.env.get('DEMO_USER_ID') || demoUserByEmail?.id || ''
 
   const users = userList.users
@@ -381,28 +371,26 @@ Deno.serve(async () => {
       await syncSimpleFINForUser(supabase, uid)
 
       // Fetch accounts for this user (include balance for synced accounts, exclude excluded accounts)
-      const { data: accounts } = await supabase
-        .from('accounts')
+      const { data: accounts } = await supabase.schema('batchfolio').from('accounts')
         .select('id, is_synced, balance, is_excluded')
         .eq('user_id', uid)
 
       const accountList = (accounts ?? []) as { id: string; is_synced: boolean; balance: number; is_excluded: boolean }[]
 
       // Filter out excluded accounts from all calculations
-      const activeAccounts = accountList.filter((a) => !a.is_excluded)
+      const activeAccounts = accountList.filter((a: { is_excluded: boolean }) => !a.is_excluded)
 
       // Calculate synced assets total directly from account balances
       const syncedAssetsTotal = activeAccounts
-        .filter((a) => a.is_synced && a.balance > 0)
-        .reduce((sum, a) => sum + a.balance, 0)
+        .filter((a: { is_synced: boolean; balance: number }) => a.is_synced && (a.balance as number) > 0)
+        .reduce((sum: number, a: { balance: number }) => sum + (a.balance as number), 0)
 
       // Fetch holdings for non-synced accounts (manual)
-      const manualAccountIds = activeAccounts.filter((a) => !a.is_synced).map((a) => a.id)
+      const manualAccountIds = activeAccounts.filter((a: { is_synced: boolean }) => !a.is_synced).map((a: { id: string }) => a.id)
       let manualHoldings: { ticker: string; shares: number; avg_cost_basis: number }[] = []
 
       if (manualAccountIds.length > 0) {
-        const { data: holdingRows } = await supabase
-          .from('holdings')
+        const { data: holdingRows } = await supabase.schema('batchfolio').from('holdings')
           .select('ticker, shares, avg_cost_basis')
           .in('account_id', manualAccountIds)
         manualHoldings = holdingRows ?? []
@@ -435,8 +423,7 @@ Deno.serve(async () => {
       const totalAssets = syncedAssetsTotal + manualAssetsTotal
 
       // Fetch total liabilities balance
-      const { data: liabRows } = await supabase
-        .from('liabilities')
+      const { data: liabRows } = await supabase.schema('batchfolio').from('liabilities')
         .select('balance')
         .eq('user_id', uid)
 
@@ -448,7 +435,7 @@ Deno.serve(async () => {
       const netWorth = totalAssets - totalLiabilities
 
       // Upsert snapshot for today
-      const { error: upsertErr } = await supabase.from('net_worth_snapshots').upsert(
+      const { error: upsertErr } = await supabase.schema('batchfolio').from('net_worth_snapshots').upsert(
         {
           user_id: uid,
           date: today,
