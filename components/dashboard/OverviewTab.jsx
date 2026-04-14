@@ -345,7 +345,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
       </div>
 
       {/* Row 2: Holdings (1.8fr) | Allocation (1fr) | Top Movers (1fr) */}
-      <div className="grid grid-cols-1 md:grid-cols-[1.8fr_1fr_1fr] gap-4 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-[1.8fr_1fr_1fr] gap-4 items-stretch">
         <HoldingsWidget
           loading={loading}
           holdings={enrichedHoldings}

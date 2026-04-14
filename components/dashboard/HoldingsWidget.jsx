@@ -23,12 +23,12 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
     : holdings
 
   const headers = [
-    { label: 'Ticker / Name', align: 'text-left', width: 'flex-1 min-w-[80px]' },
-    { label: '', align: '', width: 'w-[50px]' },
-    { label: 'Shares', align: 'text-right', width: 'w-[60px]' },
-    { label: 'Price', align: 'text-right', width: 'w-[72px]' },
-    { label: 'Value', align: 'text-right', width: 'w-[80px]' },
-    { label: 'Return', align: 'text-right', width: 'w-[70px]' },
+    { label: 'Ticker / Name', align: 'text-left', width: 'flex-1 min-w-0' },
+    { label: '', align: '', width: 'w-[50px] flex-shrink-0' },
+    { label: 'Shares', align: 'text-right', width: 'w-[60px] flex-shrink-0' },
+    { label: 'Price', align: 'text-right', width: 'w-[72px] flex-shrink-0' },
+    { label: 'Value', align: 'text-right', width: 'w-[80px] flex-shrink-0' },
+    { label: 'Return', align: 'text-right', width: 'w-[70px] flex-shrink-0' },
   ]
 
   return (
@@ -64,7 +64,7 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
       ) : (
         <>
           {/* Column headers - desktop only */}
-          <div className="hidden md:flex items-center gap-2 px-1 mb-1">
+          <div className="hidden md:flex items-center gap-2 mb-1">
             {headers.map((h, i) => (
               <span
                 key={i}

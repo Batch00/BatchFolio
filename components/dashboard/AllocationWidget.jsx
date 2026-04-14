@@ -104,7 +104,7 @@ export default function AllocationWidget({ loading, holdings }) {
   }
 
   return (
-    <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4">
+    <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4 h-full">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <p

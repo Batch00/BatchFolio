@@ -17,20 +17,6 @@ export default function MoversWidget({ loading, holdings, prices, onOpenDrawer }
               absDayPct: Math.abs(q.changePercent),
               dayPct: q.changePercent,
               livePrice: q.price ?? 0,
-              label: 'Today',
-            }
-          }
-          // Synced holdings fallback: use total return vs cost basis
-          if (h.is_synced && h.last_synced_price > 0 && h.avg_cost_basis > 0) {
-            const totalReturn = ((h.last_synced_price - h.avg_cost_basis) / h.avg_cost_basis) * 100
-            if (Math.abs(totalReturn) > 0.01) {
-              return {
-                ...h,
-                absDayPct: Math.abs(totalReturn),
-                dayPct: totalReturn,
-                livePrice: h.last_synced_price,
-                label: 'Return',
-              }
             }
           }
           return null
@@ -57,9 +43,9 @@ export default function MoversWidget({ loading, holdings, prices, onOpenDrawer }
             <Skeleton key={i} className="h-10" />
           ))}
         </div>
-      ) : movers.length === 0 ? (
+      ) : movers.length < 2 ? (
         <div className="min-h-[80px] flex items-center justify-center">
-          <p className="text-xs text-[#7d8590]">No market data available.</p>
+          <p className="text-xs text-[#7d8590]">No live market data available today</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -79,31 +65,14 @@ export default function MoversWidget({ loading, holdings, prices, onOpenDrawer }
                       {m.description || m.name || m.ticker}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`font-mono text-xs font-semibold ${
-                        positive ? 'text-[#34d399]' : 'text-[#f87171]'
-                      }`}
-                    >
-                      {positive ? '+' : ''}
-                      {m.dayPct.toFixed(2)}%
-                    </span>
-                    {m.label === 'Return' && (
-                      <span
-                        className="font-mono"
-                        style={{
-                          fontSize: 9,
-                          color: '#7d8590',
-                          background: '#21262d',
-                          padding: '1px 4px',
-                          borderRadius: 2,
-                          letterSpacing: '0.04em',
-                        }}
-                      >
-                        TOTAL
-                      </span>
-                    )}
-                  </div>
+                  <span
+                    className={`font-mono text-xs font-semibold ${
+                      positive ? 'text-[#34d399]' : 'text-[#f87171]'
+                    }`}
+                  >
+                    {positive ? '+' : ''}
+                    {m.dayPct.toFixed(2)}%
+                  </span>
                 </div>
                 <div className="h-1.5 bg-[#21262d] rounded overflow-hidden">
                   <div
