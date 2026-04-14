@@ -450,7 +450,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, width: '100%', minWidth: 0, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', width: '100%', overflow: 'hidden' }}>
                 {/* Donut: fixed width, never grows */}
                 <div style={{ width: 180, height: 180, flexShrink: 0 }}>
                   <PieChart width={180} height={180}>
@@ -483,10 +483,10 @@ export default function PortfolioTab({ onOpenDrawer }) {
                   </PieChart>
                 </div>
 
-                {/* Legend: fixed width grid layout */}
-                <div style={{ width: 260, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 220, overflowY: 'auto', overflowX: 'hidden' }}>
+                {/* Legend: fills remaining space, grid columns pin the percentage */}
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 220, overflowY: 'auto', overflowX: 'hidden', paddingRight: 14 }}>
                   {allocLegend.map((d, i) => (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '10px 1fr 36px', alignItems: 'center', gap: 6 }}>
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '10px 1fr 42px', alignItems: 'center', gap: 6 }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color }} />
                       <span style={{ fontSize: 11, color: '#e6edf3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={d.fullLabel}>
                         {d.fullLabel}
