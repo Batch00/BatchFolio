@@ -80,6 +80,17 @@ export async function POST() {
       return Response.json({ error: 'No SimpleFIN connection' }, { status: 400 })
     }
 
+    if (conn.last_synced_at) {
+      const lastSync = new Date(conn.last_synced_at)
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+      if (lastSync > oneHourAgo) {
+        return Response.json({
+          alreadySynced: true,
+          message: 'Already synced recently. SimpleFIN updates once per day.'
+        })
+      }
+    }
+
     // Parse access URL for credentials
     const url = new URL(conn.access_url)
     const username = url.username
