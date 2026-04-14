@@ -24,6 +24,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   const [watchlist, setWatchlist] = useState([])
   const [liveLiabilities, setLiveLiabilities] = useState([])
   const [liveAccounts, setLiveAccounts] = useState([])
+  const [liveQuotes, setLiveQuotes] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [range, setRange] = useState('today')
@@ -57,7 +58,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     const manualHoldings = allHoldings.filter((h) => !h.is_synced)
     const syncedHoldings = allHoldings.filter((h) => h.is_synced)
 
-    // Build price map directly from last_synced_price — no API call needed
+    // Step 1: build base price map from last_synced_price — never let Finnhub zero overwrite this
     const syncedPriceMap = {}
     syncedHoldings.forEach((h) => {
       if (h.last_synced_price > 0) syncedPriceMap[h.ticker] = { price: h.last_synced_price }
@@ -66,13 +67,17 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     const wlItems = watchlistRes.data ?? []
     const wlTickers = wlItems.map((w) => w.ticker)
 
-    // Only call Finnhub for manual holdings, synced holdings with no price, and watchlist
+    // Step 2: only fetch Finnhub for manual holdings, synced holdings with no price, and watchlist
+    // Do NOT fetch for synced mutual funds that already have last_synced_price
     const holdingTickers = [...new Set(allHoldings.map((h) => h.ticker))].filter(
       (t) => t !== 'CASH',
     )
     const tickersNeedingQuotes = [
       ...new Set([
-        ...allHoldings.map((h) => h.ticker),
+        ...manualHoldings.map((h) => h.ticker),
+        ...syncedHoldings
+          .filter((h) => !h.last_synced_price || h.last_synced_price <= 0)
+          .map((h) => h.ticker),
         ...wlTickers,
       ]),
     ].filter((t) => t !== 'CASH')
@@ -89,7 +94,12 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     priceResults.forEach(({ t, q }) => {
       if (q) liveQuoteMap[t] = q
     })
-    const priceMap = { ...syncedPriceMap, ...liveQuoteMap }
+
+    // Step 3: merge — live quote only overwrites syncedPriceMap if Finnhub returned a real price
+    const priceMap = { ...syncedPriceMap }
+    Object.entries(liveQuoteMap).forEach(([ticker, data]) => {
+      if (data?.price > 0) priceMap[ticker] = data
+    })
 
     const accountNameMap = {}
     ;(accountsRes.data ?? []).forEach((a) => { accountNameMap[a.id] = a.name })
@@ -102,6 +112,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     setSnapshots(snapshotsRes.data ?? [])
     setHoldings(annotatedHoldings)
     setPrices(priceMap)
+    setLiveQuotes(liveQuoteMap)
     setWatchlist(wlItems)
     setLiveLiabilities(liabRes.data ?? [])
     setLiveAccounts(allAccounts)
@@ -311,6 +322,14 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     })
     .sort((a, b) => b.value - a.value)
 
+  // Step 4: movers — only holdings with a valid Finnhub changePercent
+  const moversData = enrichedHoldings
+    .filter((h) => {
+      const cp = liveQuotes[h.ticker]?.changePercent
+      return cp != null && Math.abs(cp) > 0.001
+    })
+    .map((h) => ({ ...h, changePercent: liveQuotes[h.ticker].changePercent }))
+
   const enrichedWatchlist = watchlist.map((w) => ({
     ...w,
     quote: prices[w.ticker] ?? null,
@@ -352,7 +371,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
         <AllocationWidget loading={loading} holdings={enrichedHoldings} />
         <MoversWidget
           loading={loading}
-          holdings={enrichedHoldings}
+          holdings={moversData}
           prices={prices}
           onOpenDrawer={onOpenDrawer}
         />
