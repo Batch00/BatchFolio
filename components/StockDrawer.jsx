@@ -61,47 +61,95 @@ export default function StockDrawer({ ticker, onClose }) {
   const [chartLoading, setChartLoading] = useState(false)
   const [error, setError] = useState(null)
   const [position, setPosition] = useState(null)
+  // null = unknown, true = synced fund (SimpleFIN), false = normal Finnhub
+  const [isSyncedFund, setIsSyncedFund] = useState(null)
+  const [syncedData, setSyncedData] = useState(null)
 
   useEffect(() => {
     if (!symbol) return
     setLoading(true)
     setNewsLoading(true)
     setError(null)
+    setQuote(null)
+    setFundamentals(null)
+    setNews([])
+    setPosition(null)
+    setSyncedData(null)
+    setIsSyncedFund(null)
+    setCandles([])
 
-    Promise.all([
-      fetch(`/api/stock/quote?ticker=${symbol}`).then((r) => r.json()),
-      fetch(`/api/stock/fundamentals?ticker=${symbol}`).then((r) => r.json()),
-      fetch(`/api/stock/news?ticker=${symbol}`).then((r) => r.json()),
-      supabase.from('holdings').select('*').eq('ticker', symbol),
-    ])
-      .then(([q, f, n, holdRes]) => {
-        if (q.error) throw new Error(q.error)
-        setQuote(q)
-        setFundamentals(f)
-        setNews(n.news ?? [])
-        setNewsLoading(false)
-        const holds = holdRes.data ?? []
-        if (holds.length > 0) {
-          const totalShares = holds.reduce((s, h) => s + h.shares, 0)
-          const totalCost = holds.reduce((s, h) => s + h.shares * h.avg_cost_basis, 0)
-          const avgCost = totalShares > 0 ? totalCost / totalShares : 0
-          const totalValue = totalShares * (q.price ?? 0)
-          const gainLoss = totalValue - totalCost
-          const gainPct = totalCost > 0 ? (gainLoss / totalCost) * 100 : 0
-          setPosition({ totalShares, avgCost, totalValue, totalCost, gainLoss, gainPct })
+    supabase
+      .from('holdings')
+      .select('*')
+      .eq('ticker', symbol)
+      .then(({ data: holds }) => {
+        const holdingsArr = holds ?? []
+        const allSynced =
+          holdingsArr.length > 0 &&
+          holdingsArr.every((h) => h.is_synced && h.last_synced_price > 0)
+
+        if (allSynced) {
+          // SimpleFIN mode — no Finnhub calls
+          const totalShares = holdingsArr.reduce((s, h) => s + h.shares, 0)
+          const costBasisTotal = holdingsArr.reduce(
+            (s, h) => s + (h.cost_basis_total || h.shares * h.avg_cost_basis),
+            0,
+          )
+          const avgCost = totalShares > 0 ? costBasisTotal / totalShares : 0
+          const lastSyncedPrice = holdingsArr[0].last_synced_price
+          const totalValue = totalShares * lastSyncedPrice
+          const gainLoss = totalValue - costBasisTotal
+          const gainPct = costBasisTotal > 0 ? (gainLoss / costBasisTotal) * 100 : 0
+
+          setSyncedData({
+            price: lastSyncedPrice,
+            description: holdingsArr[0].description || null,
+          })
+          setPosition({ totalShares, avgCost, totalValue, totalCost: costBasisTotal, gainLoss, gainPct })
+          setIsSyncedFund(true)
+          setLoading(false)
+          setNewsLoading(false)
         } else {
-          setPosition(null)
+          // Normal Finnhub mode
+          setIsSyncedFund(false)
+          Promise.all([
+            fetch(`/api/stock/quote?ticker=${symbol}`).then((r) => r.json()),
+            fetch(`/api/stock/fundamentals?ticker=${symbol}`).then((r) => r.json()),
+            fetch(`/api/stock/news?ticker=${symbol}`).then((r) => r.json()),
+          ])
+            .then(([q, f, n]) => {
+              if (q.error) throw new Error(q.error)
+              setQuote(q)
+              setFundamentals(f)
+              setNews(n.news ?? [])
+              setNewsLoading(false)
+              if (holdingsArr.length > 0) {
+                const totalShares = holdingsArr.reduce((s, h) => s + h.shares, 0)
+                const totalCost = holdingsArr.reduce((s, h) => s + h.shares * h.avg_cost_basis, 0)
+                const avgCost = totalShares > 0 ? totalCost / totalShares : 0
+                const totalValue = totalShares * (q.price ?? 0)
+                const gainLoss = totalValue - totalCost
+                const gainPct = totalCost > 0 ? (gainLoss / totalCost) * 100 : 0
+                setPosition({ totalShares, avgCost, totalValue, totalCost, gainLoss, gainPct })
+              }
+            })
+            .catch((err) => {
+              setError(err.message)
+              setNewsLoading(false)
+            })
+            .finally(() => setLoading(false))
         }
       })
       .catch((err) => {
         setError(err.message)
+        setLoading(false)
         setNewsLoading(false)
       })
-      .finally(() => setLoading(false))
   }, [symbol])
 
   const loadChart = useCallback(async () => {
-    if (!symbol) return
+    // Only load chart for non-synced holdings — wait until isSyncedFund is resolved
+    if (!symbol || isSyncedFund !== false) return
     setChartLoading(true)
     try {
       const url = `/api/stock/chart?ticker=${symbol}&range=${range}`
@@ -114,7 +162,7 @@ export default function StockDrawer({ ticker, onClose }) {
     } finally {
       setChartLoading(false)
     }
-  }, [symbol, range])
+  }, [symbol, range, isSyncedFund])
 
   useEffect(() => {
     loadChart()
@@ -150,7 +198,9 @@ export default function StockDrawer({ ticker, onClose }) {
               ) : (
                 <>
                   <p className="font-mono text-base text-[#10b981] font-semibold">{symbol}</p>
-                  <p className="text-xs text-[#7d8590] mt-0.5">{quote?.name ?? '--'}</p>
+                  <p className="text-xs text-[#7d8590] mt-0.5">
+                    {isSyncedFund ? (syncedData?.description ?? symbol) : (quote?.name ?? '--')}
+                  </p>
                 </>
               )}
             </div>
@@ -167,6 +217,15 @@ export default function StockDrawer({ ticker, onClose }) {
             <>
               <Skeleton className="h-8 w-28 mb-1" />
               <Skeleton className="h-5 w-24" />
+            </>
+          ) : isSyncedFund ? (
+            <>
+              <p className="font-mono text-2xl font-semibold text-[#e6edf3]">
+                {fmtCurrency(syncedData?.price)}
+              </p>
+              <p className="text-[10px] text-[#7d8590] mt-1">
+                Price sourced from SimpleFIN — updated daily
+              </p>
             </>
           ) : (
             <>
@@ -190,30 +249,32 @@ export default function StockDrawer({ ticker, onClose }) {
         </div>
 
         <div className="stock-drawer-body">
-          {/* Chart */}
-          <div className="px-5 pt-3">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-[#7d8590]">Price</p>
-              <div className="flex gap-0.5 bg-[#21262d] rounded p-0.5">
-                {RANGES.map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => setRange(r)}
-                    className={`px-2 py-0.5 text-xs rounded font-mono transition-colors ${
-                      range === r ? 'bg-[#10b981] text-white' : 'text-[#7d8590] hover:text-[#e6edf3]'
-                    }`}
-                  >
-                    {r}
-                  </button>
-                ))}
+          {/* Chart — hidden for synced mutual funds */}
+          {isSyncedFund === false && (
+            <div className="px-5 pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-[#7d8590]">Price</p>
+                <div className="flex gap-0.5 bg-[#21262d] rounded p-0.5">
+                  {RANGES.map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setRange(r)}
+                      className={`px-2 py-0.5 text-xs rounded font-mono transition-colors ${
+                        range === r ? 'bg-[#10b981] text-white' : 'text-[#7d8590] hover:text-[#e6edf3]'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
               </div>
+              {chartLoading ? (
+                <Skeleton className="h-[120px]" />
+              ) : (
+                <StockPriceChart candles={candles} />
+              )}
             </div>
-            {chartLoading ? (
-              <Skeleton className="h-[120px]" />
-            ) : (
-              <StockPriceChart candles={candles} />
-            )}
-          </div>
+          )}
 
           {/* Your position */}
           {!loading && position && (
@@ -240,8 +301,8 @@ export default function StockDrawer({ ticker, onClose }) {
             </div>
           )}
 
-          {/* Key stats */}
-          {!loading && (
+          {/* Key stats — Finnhub only */}
+          {!loading && isSyncedFund === false && (
             <div className="px-5 pt-4">
               <p className="text-[10px] uppercase tracking-[0.08em] text-[#7d8590] mb-[10px]">Key Stats</p>
               <div className="bg-[#0d1117] border border-[#21262d] rounded-md px-3 py-1">
@@ -277,8 +338,8 @@ export default function StockDrawer({ ticker, onClose }) {
             </div>
           )}
 
-          {/* News */}
-          {!loading && (
+          {/* News — Finnhub only */}
+          {!loading && isSyncedFund === false && (
             <div className="px-5 pt-4 pb-6">
               <div className="border-t border-[#21262d] my-4" />
               <p
