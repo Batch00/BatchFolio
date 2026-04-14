@@ -420,7 +420,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
 
           {/* Left: Allocation donut */}
           {allocDonut.length > 0 && (
-            <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4">
+            <div style={{ background: '#161b22', border: '1px solid #21262d', borderRadius: 8, padding: 16, minWidth: 0, overflow: 'hidden', maxWidth: '100%' }}>
               <div className="flex items-center justify-between mb-3">
                 <p className="text-[10px] uppercase tracking-widest text-[#7d8590] font-mono">
                   Allocation
@@ -450,7 +450,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, minWidth: 0, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, width: '100%', minWidth: 0, overflow: 'hidden' }}>
                 {/* Donut: fixed width, never grows */}
                 <div style={{ width: 160, height: 160, flexShrink: 0 }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -486,7 +486,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                 </div>
 
                 {/* Legend: takes remaining space but cannot overflow */}
-                <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 220, overflowY: 'auto', paddingRight: 4 }}>
+                <div style={{ flex: 1, minWidth: 0, width: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 220, overflowY: 'auto', paddingRight: 4 }}>
                   {allocLegend.map((d, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, overflow: 'hidden' }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
