@@ -669,8 +669,8 @@ export default function PortfolioTab({ onOpenDrawer }) {
                     return (
                       <tr
                         key={h.id ?? `${h.ticker}-${h.account_id}`}
-                        className="border-b border-[#21262d] hover:bg-[#0d1117] transition-colors cursor-pointer"
-                        onClick={() => h.ticker !== 'CASH' && onOpenDrawer(h.ticker)}
+                        className={`border-b border-[#21262d] transition-colors ${h.ticker === 'CASH' ? 'cursor-default' : 'hover:bg-[#0d1117] cursor-pointer'}`}
+                        onClick={h.ticker === 'CASH' ? undefined : () => onOpenDrawer(h.ticker)}
                       >
                         <td className="px-3 py-2.5">
                           {h.displayName ? (

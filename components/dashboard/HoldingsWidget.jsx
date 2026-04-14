@@ -93,10 +93,10 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
               return (
                 <button
                   key={h.id}
-                  onClick={() => onOpenDrawer(h.ticker)}
-                  className={`w-full flex items-center gap-2 py-0 text-left hover:bg-[#0d1117] transition-colors rounded ${
-                    i >= 6 && !mobileExpanded ? 'hidden sm:flex' : ''
-                  }`}
+                  onClick={h.ticker === 'CASH' ? undefined : () => onOpenDrawer(h.ticker)}
+                  className={`w-full flex items-center gap-2 py-0 text-left transition-colors rounded ${
+                    h.ticker === 'CASH' ? 'cursor-default' : 'hover:bg-[#0d1117] cursor-pointer'
+                  } ${i >= 6 && !mobileExpanded ? 'hidden sm:flex' : ''}`}
                   style={{ height: 36 }}
                 >
                   {/* Ticker / Name */}
