@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { PieChart, Pie, Cell, Tooltip, Label, ResponsiveContainer } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip, Label } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
 
 const SLICE_COLORS = [
@@ -78,7 +78,6 @@ export default function AllocationWidget({ loading, holdings }) {
     let colorIdx = 0
     const allItems = holdings
       .filter((h) => h.value > 0)
-      .slice(0, 8)
       .map((h) => {
         const isCash = h.ticker === 'CASH'
         const fullLabel = h.description || h.ticker
@@ -103,10 +102,6 @@ export default function AllocationWidget({ loading, holdings }) {
       ? [...nonCashItems, { label: 'Cash', fullLabel: 'Cash', origTicker: 'CASH', value: cashTotal, pct: cashPct, color: '#6b7280' }]
       : nonCashItems
   }
-
-  const MAX_VISIBLE = 8
-  const visibleLegend = legendData.slice(0, MAX_VISIBLE)
-  const hiddenCount = legendData.length - MAX_VISIBLE
 
   return (
     <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4">
@@ -150,95 +145,70 @@ export default function AllocationWidget({ loading, holdings }) {
           No holdings yet.
         </div>
       ) : (
-        <div className="flex items-start gap-3">
-          {/* Donut — 120px */}
-          <div style={{ width: 120, height: 120, flexShrink: 0 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={donutData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={35}
-                  outerRadius={55}
-                  paddingAngle={2}
-                  dataKey="value"
-                  strokeWidth={0}
-                >
-                  {donutData.map((d, i) => (
-                    <Cell key={i} fill={d.color} />
-                  ))}
-                  <Label
-                    content={({ viewBox }) => {
-                      const { cx, cy } = viewBox
-                      return (
-                        <text
-                          x={cx}
-                          y={cy}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          fill="#e6edf3"
-                          fontSize={10}
-                          fontFamily="monospace"
-                        >
-                          {fmtCompact(total)}
-                        </text>
-                      )
-                    }}
-                  />
-                </Pie>
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null
-                    const d = payload[0].payload
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, overflow: 'hidden' }}>
+          {/* Donut */}
+          <div style={{ width: 180, height: 180, flexShrink: 0 }}>
+            <PieChart width={180} height={180}>
+              <Pie
+                data={donutData}
+                cx="50%"
+                cy="50%"
+                innerRadius={52}
+                outerRadius={80}
+                paddingAngle={2}
+                dataKey="value"
+                strokeWidth={0}
+              >
+                {donutData.map((d, i) => (
+                  <Cell key={i} fill={d.color} />
+                ))}
+                <Label
+                  content={({ viewBox }) => {
+                    const { cx, cy } = viewBox
                     return (
-                      <div className="bg-[#161b22] border border-[#21262d] rounded px-2 py-1">
-                        <p className="font-mono text-xs" style={{ color: d.color }}>{d.label}</p>
-                        <p className="font-mono text-xs text-[#e6edf3]">{d.pct.toFixed(1)}%</p>
-                      </div>
+                      <text
+                        x={cx}
+                        y={cy}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fill="#e6edf3"
+                        fontSize={11}
+                        fontFamily="monospace"
+                      >
+                        {fmtCompact(total)}
+                      </text>
                     )
                   }}
                 />
-              </PieChart>
-            </ResponsiveContainer>
+              </Pie>
+              <Tooltip
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null
+                  const d = payload[0].payload
+                  return (
+                    <div className="bg-[#161b22] border border-[#21262d] rounded px-2 py-1">
+                      <p className="font-mono text-xs" style={{ color: d.color }}>{d.label}</p>
+                      <p className="font-mono text-xs text-[#e6edf3]">{d.pct.toFixed(1)}%</p>
+                    </div>
+                  )
+                }}
+              />
+            </PieChart>
           </div>
 
-          {/* Legend — flex 1, same row as donut */}
-          <div
-            className="flex flex-col gap-[5px] flex-1 min-w-0"
-            style={{ maxHeight: 180, overflowY: 'auto', paddingRight: 4 }}
-          >
-            {visibleLegend.map((d) => (
-              <div key={d.label + d.value} className="flex items-center gap-[6px] min-w-0">
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: '50%',
-                    flexShrink: 0,
-                    background: d.color,
-                  }}
-                />
-                <span
-                  className="font-mono flex-1 truncate"
-                  style={{ fontSize: 11, color: '#e6edf3', minWidth: 0 }}
-                  title={d.fullLabel}
-                >
-                  {d.label}
+          {/* Legend */}
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 200, overflowY: 'auto', overflowX: 'hidden', paddingRight: 14 }}>
+            {legendData.map((d, i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '10px 1fr 42px', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color }} />
+                <span style={{ fontSize: 11, color: '#e6edf3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={d.fullLabel ?? d.label}>
+                  {d.fullLabel ?? d.label}
                 </span>
-                <span
-                  className="font-mono text-[#7d8590]"
-                  style={{ fontSize: 11, flexShrink: 0, width: 40, textAlign: 'right' }}
-                >
+                <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#7d8590', textAlign: 'right' }}>
                   {d.pct.toFixed(1)}%
                 </span>
               </div>
             ))}
-            {hiddenCount > 0 && (
-              <p className="font-mono text-[10px] text-[#7d8590]">
-                +{hiddenCount} more
-              </p>
-            )}
           </div>
         </div>
       )}

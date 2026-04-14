@@ -84,7 +84,7 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
               scrollbarWidth: 'thin',
               scrollbarColor: '#21262d #0d1117',
               scrollbarGutter: 'stable',
-              paddingRight: 2,
+              paddingRight: 14,
             }}
           >
             {filtered.map((h, i) => {
