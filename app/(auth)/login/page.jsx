@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { getBrowserClient } from '@/lib/supabase-browser'
+import { DEMO_EMAIL } from '@/lib/constants'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -127,7 +128,7 @@ export default function LoginPage() {
                 setLoading(true)
                 setError(null)
                 const { error: err } = await supabase.auth.signInWithPassword({
-                  email: 'demo@batchfolio.app',
+                  email: DEMO_EMAIL,
                   password: 'demo1234',
                 })
                 if (err) {

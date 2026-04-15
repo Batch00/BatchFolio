@@ -5,8 +5,9 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const ticker = searchParams.get('ticker')?.toUpperCase().trim()
 
-  if (!ticker) {
-    return NextResponse.json({ error: 'ticker is required' }, { status: 400 })
+  const TICKER_REGEX = /^[A-Z0-9.\-]{1,10}$/
+  if (!ticker || !TICKER_REGEX.test(ticker)) {
+    return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 })
   }
 
   try {

@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/select'
 import { Settings, LayoutDashboard, Briefcase, PieChart, Star, ShieldCheck, Plus, Receipt } from 'lucide-react'
 import TickerSearch from '@/components/dashboard/TickerSearch'
+import { fmt } from '@/lib/format'
 
 const TABS = [
   { id: 'overview',      label: 'OVERVIEW',      icon: LayoutDashboard },
@@ -36,11 +37,6 @@ const ADD_TYPES = [
   { id: 'holding',   label: 'Add Holding' },
   { id: 'watchlist', label: 'Add Watchlist Ticker' },
 ]
-
-const fmt = (v) =>
-  v == null
-    ? '--'
-    : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v)
 
 const fmtMobile = (v) =>
   v == null

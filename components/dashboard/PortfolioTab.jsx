@@ -6,9 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { ChevronUp, ChevronDown } from 'lucide-react'
 import Sparkline from '@/components/dashboard/Sparkline'
-
-const fmt = (v) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v ?? 0)
+import { fmt } from '@/lib/format'
 
 const COLORS = [
   '#10b981',
@@ -99,8 +97,9 @@ export default function PortfolioTab({ onOpenDrawer }) {
         .from('holdings')
         .select(
           '*, last_synced_price, is_synced, description, cost_basis_total, currency, purchase_price, accounts(id, name, is_hidden, is_excluded)',
-        ),
-      supabase.from('accounts').select('id, name, type, balance, is_synced, is_hidden, is_excluded').order('created_at'),
+        )
+        .limit(500),
+      supabase.from('accounts').select('id, name, type, balance, is_synced, is_hidden, is_excluded').order('created_at').limit(500),
       supabase.from('liabilities').select('balance'),
     ])
 

@@ -12,6 +12,7 @@ import TransactionsTab from '@/components/dashboard/TransactionsTab'
 import SettingsTab from '@/components/dashboard/SettingsTab'
 import StockDrawer from '@/components/StockDrawer'
 import { LayoutDashboard, Briefcase, PieChart, Star, Settings2, X, Receipt } from 'lucide-react'
+import { DEMO_EMAIL } from '@/lib/constants'
 
 const TABS = [
   { id: 'overview',      label: 'Overview',      icon: LayoutDashboard },
@@ -43,7 +44,7 @@ export default function App() {
   const [demoToast, setDemoToast] = useState(false)
   const demoToastTimerRef = useRef(null)
 
-  const isDemo = user?.email === 'demo@batchfolio.app'
+  const isDemo = user?.email === DEMO_EMAIL
   const updateAvailable =
     initialVersionRef.current &&
     currentVersion &&

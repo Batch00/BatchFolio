@@ -31,9 +31,7 @@ import { Trash2, Plus, ChevronDown, ChevronRight, Pencil, RefreshCw, EyeOff, Eye
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-
-const fmt = (v) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v ?? 0)
+import { fmt } from '@/lib/format'
 
 function fmtDate(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
@@ -456,8 +454,8 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     setError(null)
 
     const [accsRes, holdingsRes, liabRes, snapRes] = await Promise.all([
-      supabase.from('accounts').select('*, balance, available_balance, currency, last_balance_date, is_excluded, sort_order').order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
-      supabase.from('holdings').select('*, last_synced_price, is_synced, description, cost_basis_total, currency, purchase_price').order('ticker'),
+      supabase.from('accounts').select('*, balance, available_balance, currency, last_balance_date, is_excluded, sort_order').order('sort_order', { ascending: true }).order('created_at', { ascending: true }).limit(500),
+      supabase.from('holdings').select('*, last_synced_price, is_synced, description, cost_basis_total, currency, purchase_price').order('ticker').limit(500),
       supabase.from('liabilities').select('*').order('created_at', { ascending: false }),
       supabase
         .from('net_worth_snapshots')

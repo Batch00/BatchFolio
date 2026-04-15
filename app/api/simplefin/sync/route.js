@@ -13,6 +13,10 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 // -- accounts already has unique on (user_id, simplefin_id) — verify with:
 // -- SELECT indexname FROM pg_indexes WHERE tablename = 'accounts' AND indexname LIKE '%simplefin%';
 
+const SIMPLEFIN_LOOKBACK_DAYS = 90
+const CASH_MINIMUM_BALANCE = 0.01
+const SYNC_RATE_LIMIT_MS = 60 * 60 * 1000
+
 function detectAccountType(name, orgName) {
   const lower = (name || '').toLowerCase()
   const org = (orgName || '').toLowerCase()
@@ -82,7 +86,7 @@ export async function POST() {
 
     if (conn.last_synced_at) {
       const lastSync = new Date(conn.last_synced_at)
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+      const oneHourAgo = new Date(Date.now() - SYNC_RATE_LIMIT_MS)
       if (lastSync > oneHourAgo) {
         return Response.json({
           alreadySynced: true,
@@ -99,7 +103,7 @@ export async function POST() {
     const credentials = Buffer.from(`${username}:${password}`).toString('base64')
 
     // Fetch accounts + transactions from SimpleFIN (90 days back)
-    const startDate = Math.floor((Date.now() - 90 * 24 * 60 * 60 * 1000) / 1000)
+    const startDate = Math.floor((Date.now() - SIMPLEFIN_LOOKBACK_DAYS * 24 * 60 * 60 * 1000) / 1000)
     const sfRes = await fetch(`${baseUrl}/accounts?version=2&start-date=${startDate}`, {
       headers: { Authorization: `Basic ${credentials}` },
     })
@@ -112,11 +116,8 @@ export async function POST() {
     let accountsSynced = 0
     let holdingsSynced = 0
     let transactionsSynced = 0
-    let logCount = 0
-
-    if (sfAccounts.length > 0) {
-      console.log('SimpleFIN account fields:', Object.keys(sfAccounts[0]))
-    }
+    let failedHoldings = 0
+    let failedTransactions = 0
 
     for (const sfAcc of sfAccounts) {
       // Auto-detect credit cards: route them to liabilities + sync transactions via shadow account
@@ -215,7 +216,11 @@ export async function POST() {
                     { onConflict: 'simplefin_id' },
                   )
 
-                if (!txErr) transactionsSynced++
+                if (txErr) {
+                  failedTransactions++
+                } else {
+                  transactionsSynced++
+                }
               }
             }
           }
@@ -293,21 +298,6 @@ export async function POST() {
           if (seenHoldingIds.has(h.id)) continue
           seenHoldingIds.add(h.id)
 
-          if (logCount < 3) {
-            console.log('SimpleFIN holding fields:', {
-              allKeys: Object.keys(h),
-              id: h.id,
-              symbol: h.symbol,
-              shares: h.shares,
-              market_value: h.market_value,
-              cost_basis: h.cost_basis,
-              purchase_price: h.purchase_price,
-              description: h.description,
-              currency: h.currency,
-            })
-            logCount++
-          }
-
           const mv = parseFloat(h.market_value)
           const sh = parseFloat(h.shares)
           let sharesNum = !isNaN(sh) ? sh : 0
@@ -355,6 +345,7 @@ export async function POST() {
 
           if (holdErr) {
             console.error('Holding upsert error:', holdErr.message)
+            failedHoldings++
           } else {
             holdingsSynced++
           }
@@ -362,7 +353,7 @@ export async function POST() {
       } else if (sfAcc.balance != null) {
         // Cash account — store as CASH holding
         // Use 0.01 minimum to satisfy the avg_cost_basis > 0 check constraint
-        const cashBalance = Math.max(parseFloat(sfAcc.balance ?? 0), 0.01)
+        const cashBalance = Math.max(parseFloat(sfAcc.balance ?? 0), CASH_MINIMUM_BALANCE)
         const { error: cashErr } = await supabase
           .from('holdings')
           .upsert(
@@ -381,6 +372,7 @@ export async function POST() {
 
         if (cashErr) {
           console.error('Cash holding upsert error:', cashErr.message)
+          failedHoldings++
         } else {
           holdingsSynced++
         }
@@ -418,6 +410,7 @@ export async function POST() {
 
         if (txErr) {
           console.error('Transaction upsert error:', txErr.message)
+          failedTransactions++
         } else {
           transactionsSynced++
         }
@@ -430,7 +423,7 @@ export async function POST() {
       .update({ last_synced_at: new Date().toISOString() })
       .eq('user_id', user.id)
 
-    return Response.json({ success: true, accountsSynced, holdingsSynced, transactionsSynced })
+    return Response.json({ success: true, accountsSynced, holdingsSynced, transactionsSynced, failedHoldings, failedTransactions })
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 })
   }

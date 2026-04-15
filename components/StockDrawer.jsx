@@ -6,28 +6,13 @@ import StockPriceChart from '@/components/StockPriceChart'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { X } from 'lucide-react'
+import { fmt, fmtMarketCap } from '@/lib/format'
 
 const RANGES = ['30d', '90d', '1y']
-
-function fmtCurrency(v) {
-  if (v == null) return '--'
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  }).format(v)
-}
 
 function fmtNum(v, opts = {}) {
   if (v == null) return '--'
   return new Intl.NumberFormat('en-US', opts).format(v)
-}
-
-function fmtMarketCap(v) {
-  if (v == null) return '--'
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}T`
-  if (v >= 1_000) return `$${(v / 1_000).toFixed(2)}B`
-  return `$${v.toFixed(2)}M`
 }
 
 function fmtNewsDate(isoStr) {
@@ -67,22 +52,28 @@ export default function StockDrawer({ ticker, onClose }) {
 
   useEffect(() => {
     if (!symbol) return
-    setLoading(true)
-    setNewsLoading(true)
-    setError(null)
-    setQuote(null)
-    setFundamentals(null)
-    setNews([])
-    setPosition(null)
-    setSyncedData(null)
-    setIsSyncedFund(null)
-    setCandles([])
+    let cancelled = false
 
-    supabase
-      .from('holdings')
-      .select('*')
-      .eq('ticker', symbol)
-      .then(({ data: holds }) => {
+    async function load() {
+      setLoading(true)
+      setNewsLoading(true)
+      setError(null)
+      setQuote(null)
+      setFundamentals(null)
+      setNews([])
+      setPosition(null)
+      setSyncedData(null)
+      setIsSyncedFund(null)
+      setCandles([])
+
+      try {
+        const { data: holds } = await supabase
+          .from('holdings')
+          .select('*')
+          .eq('ticker', symbol)
+          .limit(500)
+        if (cancelled) return
+
         const holdingsArr = holds ?? []
         const allSynced =
           holdingsArr.length > 0 &&
@@ -101,6 +92,7 @@ export default function StockDrawer({ ticker, onClose }) {
           const gainLoss = totalValue - costBasisTotal
           const gainPct = costBasisTotal > 0 ? (gainLoss / costBasisTotal) * 100 : 0
 
+          if (cancelled) return
           setSyncedData({
             price: lastSyncedPrice,
             description: holdingsArr[0].description || null,
@@ -112,39 +104,39 @@ export default function StockDrawer({ ticker, onClose }) {
         } else {
           // Normal Finnhub mode
           setIsSyncedFund(false)
-          Promise.all([
+          const [q, f, n] = await Promise.all([
             fetch(`/api/stock/quote?ticker=${symbol}`).then((r) => r.json()),
             fetch(`/api/stock/fundamentals?ticker=${symbol}`).then((r) => r.json()),
             fetch(`/api/stock/news?ticker=${symbol}`).then((r) => r.json()),
           ])
-            .then(([q, f, n]) => {
-              if (q.error) throw new Error(q.error)
-              setQuote(q)
-              setFundamentals(f)
-              setNews(n.news ?? [])
-              setNewsLoading(false)
-              if (holdingsArr.length > 0) {
-                const totalShares = holdingsArr.reduce((s, h) => s + h.shares, 0)
-                const totalCost = holdingsArr.reduce((s, h) => s + h.shares * h.avg_cost_basis, 0)
-                const avgCost = totalShares > 0 ? totalCost / totalShares : 0
-                const totalValue = totalShares * (q.price ?? 0)
-                const gainLoss = totalValue - totalCost
-                const gainPct = totalCost > 0 ? (gainLoss / totalCost) * 100 : 0
-                setPosition({ totalShares, avgCost, totalValue, totalCost, gainLoss, gainPct })
-              }
-            })
-            .catch((err) => {
-              setError(err.message)
-              setNewsLoading(false)
-            })
-            .finally(() => setLoading(false))
+          if (cancelled) return
+          if (q.error) throw new Error(q.error)
+          setQuote(q)
+          setFundamentals(f)
+          setNews(n.news ?? [])
+          setNewsLoading(false)
+          if (holdingsArr.length > 0) {
+            const totalShares = holdingsArr.reduce((s, h) => s + h.shares, 0)
+            const totalCost = holdingsArr.reduce((s, h) => s + h.shares * h.avg_cost_basis, 0)
+            const avgCost = totalShares > 0 ? totalCost / totalShares : 0
+            const totalValue = totalShares * (q.price ?? 0)
+            const gainLoss = totalValue - totalCost
+            const gainPct = totalCost > 0 ? (gainLoss / totalCost) * 100 : 0
+            setPosition({ totalShares, avgCost, totalValue, totalCost, gainLoss, gainPct })
+          }
+          setLoading(false)
         }
-      })
-      .catch((err) => {
-        setError(err.message)
-        setLoading(false)
-        setNewsLoading(false)
-      })
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message)
+          setLoading(false)
+          setNewsLoading(false)
+        }
+      }
+    }
+
+    load()
+    return () => { cancelled = true }
   }, [symbol])
 
   const loadChart = useCallback(async () => {
@@ -221,7 +213,7 @@ export default function StockDrawer({ ticker, onClose }) {
           ) : isSyncedFund ? (
             <>
               <p className="font-mono text-2xl font-semibold text-[#e6edf3]">
-                {fmtCurrency(syncedData?.price)}
+                {fmt(syncedData?.price)}
               </p>
               <p className="text-[10px] text-[#7d8590] mt-1">
                 Price sourced from SimpleFIN — updated daily
@@ -230,13 +222,13 @@ export default function StockDrawer({ ticker, onClose }) {
           ) : (
             <>
               <p className="font-mono text-2xl font-semibold text-[#e6edf3]">
-                {fmtCurrency(quote?.price)}
+                {fmt(quote?.price)}
               </p>
               <div className="mt-1">
                 <Badge variant={positive ? 'positive' : 'negative'}>
                   <span className="font-mono text-xs">
                     {positive ? '+' : ''}
-                    {fmtCurrency(quote?.change)}{' '}
+                    {fmt(quote?.change)}{' '}
                     ({positive ? '+' : ''}
                     {fmtNum(quote?.changePercent, { maximumFractionDigits: 2 })}%)
                   </span>
@@ -285,11 +277,11 @@ export default function StockDrawer({ ticker, onClose }) {
                   label="Shares"
                   value={fmtNum(position.totalShares, { maximumFractionDigits: 4 })}
                 />
-                <StatRow label="Avg Cost" value={fmtCurrency(position.avgCost)} />
-                <StatRow label="Total Value" value={fmtCurrency(position.totalValue)} />
+                <StatRow label="Avg Cost" value={fmt(position.avgCost)} />
+                <StatRow label="Total Value" value={fmt(position.totalValue)} />
                 <StatRow
                   label="Gain/Loss"
-                  value={`${position.gainLoss >= 0 ? '+' : ''}${fmtCurrency(position.gainLoss)}`}
+                  value={`${position.gainLoss >= 0 ? '+' : ''}${fmt(position.gainLoss)}`}
                   colored={position.gainLoss >= 0 ? 'text-[#34d399]' : 'text-[#f87171]'}
                 />
                 <StatRow
@@ -315,9 +307,9 @@ export default function StockDrawer({ ticker, onClose }) {
                       : null
                   }
                 />
-                <StatRow label="EPS" value={fmtCurrency(fundamentals?.eps)} />
-                <StatRow label="52w High" value={fmtCurrency(fundamentals?.high52w)} />
-                <StatRow label="52w Low" value={fmtCurrency(fundamentals?.low52w)} />
+                <StatRow label="EPS" value={fmt(fundamentals?.eps)} />
+                <StatRow label="52w High" value={fmt(fundamentals?.high52w)} />
+                <StatRow label="52w Low" value={fmt(fundamentals?.low52w)} />
                 <StatRow
                   label="Dividend"
                   value={

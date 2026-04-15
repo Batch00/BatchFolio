@@ -1,20 +1,7 @@
 'use client'
 
 import { Skeleton } from '@/components/ui/skeleton'
-
-const fmt = (v) =>
-  v == null
-    ? '--'
-    : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v)
-
-const fmtCompact = (v) => {
-  if (v == null) return '--'
-  const abs = Math.abs(v)
-  const sign = v < 0 ? '-' : ''
-  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(2)}M`
-  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(1)}K`
-  return fmt(v)
-}
+import { fmt, fmtCompact } from '@/lib/format'
 
 const RANGES = [
   { id: 'today', label: 'TODAY' },

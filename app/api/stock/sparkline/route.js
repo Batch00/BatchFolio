@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server'
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
-  const ticker = searchParams.get('ticker')
+  const ticker = searchParams.get('ticker')?.toUpperCase().trim()
 
-  if (!ticker) {
+  const TICKER_REGEX = /^[A-Z0-9.\-]{1,10}$/
+  if (!ticker || !TICKER_REGEX.test(ticker)) {
     return NextResponse.json(
-      { error: 'ticker required' },
+      { error: 'Invalid ticker symbol' },
       { status: 400 }
     )
   }
@@ -18,10 +19,11 @@ export async function GET(request) {
   const from = fromDate.toISOString().split('T')[0]
   const to = toDate.toISOString().split('T')[0]
 
-  const url = `https://api.polygon.io/v2/aggs/ticker/${ticker.toUpperCase()}/range/1/day/${from}/${to}?adjusted=true&sort=asc&limit=10&apiKey=${process.env.POLYGON_API_KEY}`
+  const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/day/${from}/${to}?adjusted=true&sort=asc&limit=10`
 
   try {
     const res = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${process.env.POLYGON_API_KEY}` },
       next: { revalidate: 3600 }
     })
 

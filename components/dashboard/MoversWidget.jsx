@@ -1,9 +1,7 @@
 'use client'
 
 import { Skeleton } from '@/components/ui/skeleton'
-
-const fmt = (v) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v ?? 0)
+import { fmt } from '@/lib/format'
 
 export default function MoversWidget({ loading, holdings, prices, onOpenDrawer }) {
   const movers = !loading

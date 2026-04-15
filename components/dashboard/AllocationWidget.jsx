@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, Label } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
+import { fmtCompact } from '@/lib/format'
 
 const SLICE_COLORS = [
   '#10b981', // emerald
@@ -25,12 +26,6 @@ const CLASS_COLORS = {
   'Balanced': '#06b6d4',
   'Sector': '#ef4444',
   'US Equities': '#065f46',
-}
-
-function fmtCompact(v) {
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`
-  if (v >= 1_000) return `$${Math.round(v / 1_000)}k`
-  return `$${Math.round(v)}`
 }
 
 function getAssetClass(ticker, description) {

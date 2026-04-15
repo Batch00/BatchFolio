@@ -8,13 +8,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Trash2 } from 'lucide-react'
 import RangeBar from '@/components/dashboard/RangeBar'
 import TickerSearch from '@/components/dashboard/TickerSearch'
+import { fmt, fmtPercent } from '@/lib/format'
 
-const fmt = (v) => (v == null ? '--' : `$${Number(v).toFixed(2)}`)
-const fmtPct = (v) => (v == null ? '--' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`)
-const fmtCurrency = (v) =>
-  v == null
-    ? '--'
-    : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v)
+const fmtPct = (v) => fmtPercent(v)
 
 export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
   const supabase = createClient()
@@ -34,6 +30,7 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
       .from('watchlist')
       .select('*')
       .order('added_at', { ascending: false })
+      .limit(500)
 
     if (err) {
       setError(err.message)

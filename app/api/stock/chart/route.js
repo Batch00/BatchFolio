@@ -20,12 +20,13 @@ const RANGE_CONFIG = {
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
-  const ticker = searchParams.get('ticker')
+  const ticker = searchParams.get('ticker')?.toUpperCase().trim()
   const range = searchParams.get('range') || '30d'
 
-  if (!ticker) {
+  const TICKER_REGEX = /^[A-Z0-9.\-]{1,10}$/
+  if (!ticker || !TICKER_REGEX.test(ticker)) {
     return NextResponse.json(
-      { error: 'ticker required' },
+      { error: 'Invalid ticker symbol' },
       { status: 400 }
     )
   }
@@ -39,10 +40,13 @@ export async function GET(request) {
   const from = fromDate.toISOString().split('T')[0]
   const to = toDate.toISOString().split('T')[0]
 
-  const url = `https://api.polygon.io/v2/aggs/ticker/${ticker.toUpperCase()}/range/${config.multiplier}/${config.timespan}/${from}/${to}?adjusted=true&sort=asc&limit=365&apiKey=${process.env.POLYGON_API_KEY}`
+  const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/${config.multiplier}/${config.timespan}/${from}/${to}?adjusted=true&sort=asc&limit=365`
 
   try {
-    const res = await fetch(url, { cache: 'no-store' })
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${process.env.POLYGON_API_KEY}` },
+      cache: 'no-store'
+    })
 
     if (!res.ok) {
       console.error(

@@ -8,11 +8,7 @@ import AllocationWidget from '@/components/dashboard/AllocationWidget'
 import HoldingsWidget from '@/components/dashboard/HoldingsWidget'
 import MoversWidget from '@/components/dashboard/MoversWidget'
 import WatchlistWidget from '@/components/dashboard/WatchlistWidget'
-
-const fmtLarge = (v) =>
-  v == null
-    ? '--'
-    : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
+import ErrorBoundary from '@/components/ErrorBoundary'
 
 export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   const supabase = createClient()
@@ -34,9 +30,9 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     setError(null)
 
     const [snapshotsRes, holdingsRes, watchlistRes, liabRes, accountsRes] = await Promise.all([
-      supabase.from('net_worth_snapshots').select('*').order('date', { ascending: true }),
-      supabase.from('holdings').select('*'),
-      supabase.from('watchlist').select('*').order('added_at', { ascending: false }),
+      supabase.from('net_worth_snapshots').select('*').order('date', { ascending: true }).limit(500),
+      supabase.from('holdings').select('*').limit(500),
+      supabase.from('watchlist').select('*').order('added_at', { ascending: false }).limit(500),
       supabase.from('liabilities').select('balance'),
       supabase.from('accounts').select('id, name, is_synced, balance, is_excluded'),
     ])
@@ -135,7 +131,6 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     setLoading(false)
 
     // Update top bar net worth using live liabilities total
-    const latestSnap = (snapshotsRes.data ?? []).slice(-1)[0]
     const liveLiabTotal = (liabRes.data ?? []).reduce((sum, l) => sum + l.balance, 0)
 
     // Use account balance for synced accounts, holdings * price for manual (excluded accounts already filtered)
@@ -180,7 +175,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
             map[t] = prices
           })
           setSparklines(map)
-        }),
+        }).catch(err => console.error('Background fetch failed:', err)),
       )
     }
 
@@ -199,7 +194,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
             if (f) map[t] = f
           })
           setWlFundamentals(map)
-        }),
+        }).catch(err => console.error('Background fetch failed:', err)),
       )
     }
   }, [onDataLoaded])
@@ -257,7 +252,6 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     const daysBack = range === '30d' ? 30 : range === '90d' ? 90 : 365
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() - daysBack)
-    const cutoffStr = cutoff.toISOString().split('T')[0]
 
     // Find snapshot closest to cutoff date
     let closest = snapshots[0]
@@ -370,28 +364,36 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
 
       {/* Row 2: Holdings (1.8fr) | Allocation (1fr) | Top Movers (1fr) */}
       <div className="grid grid-cols-1 md:grid-cols-[1.8fr_1fr_1fr] gap-4 items-stretch">
-        <HoldingsWidget
-          loading={loading}
-          holdings={enrichedHoldings}
-          sparklines={sparklines}
-          onOpenDrawer={onOpenDrawer}
-        />
-        <AllocationWidget loading={loading} holdings={enrichedHoldings} />
-        <MoversWidget
-          loading={loading}
-          holdings={moversHoldings}
-          prices={prices}
-          onOpenDrawer={onOpenDrawer}
-        />
+        <ErrorBoundary>
+          <HoldingsWidget
+            loading={loading}
+            holdings={enrichedHoldings}
+            sparklines={sparklines}
+            onOpenDrawer={onOpenDrawer}
+          />
+        </ErrorBoundary>
+        <ErrorBoundary>
+          <AllocationWidget loading={loading} holdings={enrichedHoldings} />
+        </ErrorBoundary>
+        <ErrorBoundary>
+          <MoversWidget
+            loading={loading}
+            holdings={moversHoldings}
+            prices={prices}
+            onOpenDrawer={onOpenDrawer}
+          />
+        </ErrorBoundary>
       </div>
 
       {/* Row 3: Full width watchlist */}
-      <WatchlistWidget
-        loading={loading}
-        watchlist={enrichedWatchlist.slice(0, 8)}
-        fundamentals={wlFundamentals}
-        onOpenDrawer={onOpenDrawer}
-      />
+      <ErrorBoundary>
+        <WatchlistWidget
+          loading={loading}
+          watchlist={enrichedWatchlist.slice(0, 8)}
+          fundamentals={wlFundamentals}
+          onOpenDrawer={onOpenDrawer}
+        />
+      </ErrorBoundary>
     </div>
   )
 }
