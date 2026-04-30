@@ -64,7 +64,7 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
       ) : (
         <>
           {/* Column headers - desktop only */}
-          <div className="hidden md:flex items-center gap-2 mb-1">
+          <div className="hidden md:flex items-center gap-2 mb-1" style={{ paddingRight: 14 }}>
             {headers.map((h, i) => (
               <span
                 key={i}
@@ -131,7 +131,7 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
 
                   {/* Price */}
                   <span className="font-mono text-xs text-[#e6edf3] w-[72px] text-right flex-shrink-0 hidden md:block">
-                    {h.hasPrice === false ? '--' : fmt(h.livePrice)}
+                    {h.ticker === 'CASH' || h.hasPrice === false ? '--' : fmt(h.livePrice)}
                   </span>
 
                   {/* Value */}
