@@ -23,7 +23,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   const [moversHoldings, setMoversHoldings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [range, setRange] = useState('today')
+  const [range, setRange] = useState('7d')
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -243,13 +243,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     if (snapshots.length === 0) return { changeDollar: 0, changePct: 0 }
     const latestNw = latest?.net_worth ?? 0
 
-    if (range === 'today') {
-      const portfolioYesterday = portfolioValue - dayChange
-      const pct = portfolioYesterday > 0 ? (dayChange / portfolioYesterday) * 100 : 0
-      return { changeDollar: dayChange, changePct: pct }
-    }
-
-    const daysBack = range === '30d' ? 30 : range === '90d' ? 90 : 365
+    const daysBack = range === '7d' ? 7 : range === '30d' ? 30 : range === '90d' ? 90 : 365
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() - daysBack)
 
@@ -338,7 +332,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   }))
 
   const rangeLabel =
-    range === 'today' ? 'today' : range === '30d' ? 'past 30 days' : range === '90d' ? 'past 90 days' : 'past year'
+    range === '7d' ? 'past 7 days' : range === '30d' ? 'past 30 days' : range === '90d' ? 'past 90 days' : 'past year'
 
   return (
     <div className="px-4 md:px-6 py-4 min-h-[calc(100vh-48px)] flex flex-col gap-4">

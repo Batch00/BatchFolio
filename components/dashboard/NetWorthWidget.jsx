@@ -4,7 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { fmt, fmtCompact } from '@/lib/format'
 
 const RANGES = [
-  { id: 'today', label: 'TODAY' },
+  { id: '7d', label: '7D' },
   { id: '30d', label: '30D' },
   { id: '90d', label: '90D' },
   { id: '1y', label: '1Y' },
