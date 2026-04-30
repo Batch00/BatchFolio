@@ -259,7 +259,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
 
     const oldNw = closest?.net_worth || 0
     const changeDollar = latestNw - oldNw
-    const changePct = oldNw > 0 ? (changeDollar / oldNw) * 100 : 0
+    const changePct = oldNw !== 0 ? (changeDollar / Math.abs(oldNw)) * 100 : 0
     return { changeDollar, changePct }
   }
 
