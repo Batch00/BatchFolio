@@ -318,6 +318,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
         costBasis,
         gainLoss,
         gainPct,
+        changePercent: prices[h.ticker]?.changePercent ?? null,
         positive: gainLoss != null ? gainLoss >= 0 : true,
         hasPrice,
         name: prices[h.ticker]?.name ?? '',

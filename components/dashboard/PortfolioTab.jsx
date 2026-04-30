@@ -775,7 +775,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                           className={`px-3 py-2.5 font-mono text-right ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}
                         >
                           {h.gainPct == null
-                            ? 'N/A'
+                            ? <span className="text-[#7d8590]">--</span>
                             : `${positive ? '+' : ''}${h.gainPct.toFixed(2)}%`}
                         </td>
                       </tr>

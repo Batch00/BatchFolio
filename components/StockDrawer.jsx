@@ -75,43 +75,27 @@ export default function StockDrawer({ ticker, onClose }) {
         if (cancelled) return
 
         const holdingsArr = holds ?? []
-        const allSynced =
-          holdingsArr.length > 0 &&
-          holdingsArr.every((h) => h.is_synced && h.last_synced_price > 0)
 
-        if (allSynced) {
-          // SimpleFIN mode — no Finnhub calls
-          const totalShares = holdingsArr.reduce((s, h) => s + h.shares, 0)
-          const costBasisTotal = holdingsArr.reduce(
-            (s, h) => s + (h.cost_basis_total || h.shares * h.avg_cost_basis),
-            0,
-          )
-          const avgCost = totalShares > 0 ? costBasisTotal / totalShares : 0
-          const lastSyncedPrice = holdingsArr[0].last_synced_price
-          const totalValue = totalShares * lastSyncedPrice
-          const gainLoss = totalValue - costBasisTotal
-          const gainPct = costBasisTotal > 0 ? (gainLoss / costBasisTotal) * 100 : 0
+        // Always try Finnhub first regardless of is_synced
+        let q = null
+        try {
+          const res = await fetch(`/api/stock/quote?ticker=${symbol}`)
+          const json = await res.json()
+          if (!json.error && json.price > 0) q = json
+        } catch {
+          // network error — q stays null
+        }
+        if (cancelled) return
 
-          if (cancelled) return
-          setSyncedData({
-            price: lastSyncedPrice,
-            description: holdingsArr[0].description || null,
-          })
-          setPosition({ totalShares, avgCost, totalValue, totalCost: costBasisTotal, gainLoss, gainPct })
-          setIsSyncedFund(true)
-          setLoading(false)
-          setNewsLoading(false)
-        } else {
-          // Normal Finnhub mode
+        if (q) {
+          // Finnhub returned a valid price — show full view
           setIsSyncedFund(false)
-          const [q, f, n] = await Promise.all([
-            fetch(`/api/stock/quote?ticker=${symbol}`).then((r) => r.json()),
+          setQuote(q)
+          const [f, n] = await Promise.all([
             fetch(`/api/stock/fundamentals?ticker=${symbol}`).then((r) => r.json()),
             fetch(`/api/stock/news?ticker=${symbol}`).then((r) => r.json()),
           ])
           if (cancelled) return
-          if (q.error) throw new Error(q.error)
-          setQuote(q)
           setFundamentals(f)
           setNews(n.news ?? [])
           setNewsLoading(false)
@@ -119,12 +103,37 @@ export default function StockDrawer({ ticker, onClose }) {
             const totalShares = holdingsArr.reduce((s, h) => s + h.shares, 0)
             const totalCost = holdingsArr.reduce((s, h) => s + h.shares * h.avg_cost_basis, 0)
             const avgCost = totalShares > 0 ? totalCost / totalShares : 0
-            const totalValue = totalShares * (q.price ?? 0)
+            const totalValue = totalShares * q.price
             const gainLoss = totalValue - totalCost
             const gainPct = totalCost > 0 ? (gainLoss / totalCost) * 100 : 0
             setPosition({ totalShares, avgCost, totalValue, totalCost, gainLoss, gainPct })
           }
           setLoading(false)
+        } else {
+          // Finnhub returned no price — fall back to SimpleFIN last_synced_price
+          const syncedHolding = holdingsArr.find((h) => h.is_synced && h.last_synced_price > 0)
+          if (syncedHolding) {
+            const totalShares = holdingsArr.reduce((s, h) => s + h.shares, 0)
+            const costBasisTotal = holdingsArr.reduce(
+              (s, h) => s + (h.cost_basis_total || h.shares * h.avg_cost_basis),
+              0,
+            )
+            const avgCost = totalShares > 0 ? costBasisTotal / totalShares : 0
+            const lastSyncedPrice = syncedHolding.last_synced_price
+            const totalValue = totalShares * lastSyncedPrice
+            const gainLoss = totalValue - costBasisTotal
+            const gainPct = costBasisTotal > 0 ? (gainLoss / costBasisTotal) * 100 : 0
+            setSyncedData({
+              price: lastSyncedPrice,
+              description: holdingsArr[0].description || null,
+            })
+            setPosition({ totalShares, avgCost, totalValue, totalCost: costBasisTotal, gainLoss, gainPct })
+            setIsSyncedFund(true)
+          } else {
+            setError('No price data available for this ticker')
+          }
+          setLoading(false)
+          setNewsLoading(false)
         }
       } catch (err) {
         if (!cancelled) {

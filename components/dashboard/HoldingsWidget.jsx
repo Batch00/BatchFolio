@@ -28,7 +28,7 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
     { label: 'Shares', align: 'text-right', width: 'w-[60px] flex-shrink-0' },
     { label: 'Price', align: 'text-right', width: 'w-[72px] flex-shrink-0' },
     { label: 'Value', align: 'text-right', width: 'w-[80px] flex-shrink-0' },
-    { label: 'Return', align: 'text-right', width: 'w-[70px] flex-shrink-0' },
+    { label: 'Return', align: 'text-right', width: 'w-[70px] flex-shrink-0', title: 'Daily change for live tickers, all-time gain for cost-basis holdings, -- for others' },
   ]
 
   return (
@@ -70,6 +70,7 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
                 key={i}
                 className={`text-[#7d8590] font-mono ${h.align} ${h.width} flex-shrink-0`}
                 style={{ fontSize: 10, letterSpacing: '0.05em', textTransform: 'uppercase' }}
+                title={h.title}
               >
                 {h.label}
               </span>
@@ -140,12 +141,23 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
                   </span>
 
                   {/* Return % */}
-                  <span
-                    className={`font-mono text-xs w-[70px] text-right flex-shrink-0 font-semibold ${
-                      h.positive ? 'text-[#34d399]' : 'text-[#f87171]'
-                    }`}
-                  >
-                    {h.gainPct == null ? 'N/A' : `${h.positive ? '+' : ''}${h.gainPct.toFixed(2)}%`}
+                  <span className="font-mono text-xs w-[70px] text-right flex-shrink-0 font-semibold flex items-center justify-end gap-1">
+                    {h.ticker === 'CASH' ? (
+                      <span style={{ color: '#7d8590' }}>--</span>
+                    ) : h.changePercent != null && h.changePercent !== 0 ? (
+                      <>
+                        <span style={{ fontSize: 9, color: '#7d8590', background: 'rgba(125,133,144,0.1)', borderRadius: 3, padding: '1px 4px', flexShrink: 0 }}>1D</span>
+                        <span style={{ color: h.changePercent >= 0 ? '#34d399' : '#f87171' }}>
+                          {h.changePercent >= 0 ? '+' : ''}{h.changePercent.toFixed(2)}%
+                        </span>
+                      </>
+                    ) : h.gainPct != null ? (
+                      <span style={{ color: h.positive ? '#34d399' : '#f87171' }}>
+                        {h.positive ? '+' : ''}{h.gainPct.toFixed(2)}%
+                      </span>
+                    ) : (
+                      <span style={{ color: '#7d8590' }}>--</span>
+                    )}
                   </span>
                 </button>
               )
