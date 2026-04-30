@@ -241,7 +241,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   // Calculate change based on selected range
   function getChangeForRange() {
     if (snapshots.length === 0) return { changeDollar: 0, changePct: 0 }
-    const latestNw = latest?.net_worth ?? 0
+    const latestNw = latest?.net_worth || 0
 
     const daysBack = range === '7d' ? 7 : range === '30d' ? 30 : range === '90d' ? 90 : 365
     const cutoff = new Date()
@@ -258,9 +258,18 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
       }
     }
 
-    const oldNw = closest?.net_worth ?? 0
+    const oldNw = closest?.net_worth || 0
     const changeDollar = latestNw - oldNw
     const changePct = oldNw > 0 ? (changeDollar / oldNw) * 100 : 0
+    console.log('Range calc:', {
+      range,
+      oldNw,
+      latestNw,
+      changeDollar,
+      changePct,
+      oldSnapshotDate: closest?.date,
+      snapshotCount: snapshots.length,
+    })
     return { changeDollar, changePct }
   }
 
