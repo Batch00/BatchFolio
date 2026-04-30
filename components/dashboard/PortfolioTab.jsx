@@ -498,17 +498,17 @@ export default function PortfolioTab({ onOpenDrawer }) {
                 >
                   <div className="min-w-max md:min-w-0" style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                     {allocLegend.map((d, i) => (
-                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '10px 1fr 42px', alignItems: 'center', gap: 6 }}>
-                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color }} />
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#7d8590', width: 40, flexShrink: 0 }}>
+                          {d.pct.toFixed(1)}%
+                        </span>
                         <span
                           className="md:overflow-hidden md:text-ellipsis"
-                          style={{ fontSize: 11, color: '#e6edf3', whiteSpace: 'nowrap' }}
+                          style={{ fontSize: 11, color: '#e6edf3', whiteSpace: 'nowrap', marginLeft: 4 }}
                           title={d.fullLabel}
                         >
                           {d.fullLabel}
-                        </span>
-                        <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#7d8590', textAlign: 'right', flexShrink: 0 }}>
-                          {d.pct.toFixed(1)}%
                         </span>
                       </div>
                     ))}
