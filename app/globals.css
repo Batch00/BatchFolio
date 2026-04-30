@@ -60,6 +60,15 @@ body {
   border-radius: 3px;
 }
 
+/* Hide scrollbar visually while keeping scroll functional */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* LIVE dot animation */
 @keyframes live-pulse {
   0%, 100% { opacity: 1; }

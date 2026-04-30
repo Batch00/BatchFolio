@@ -110,7 +110,7 @@ export default function AllocationWidget({ loading, holdings }) {
         </p>
         <div className="flex items-center gap-1">
           {[
-            { id: 'ticker', label: 'Ticker' },
+            { id: 'ticker', label: 'Holding' },
             { id: 'class', label: 'Class' },
           ].map((opt) => (
             <button
@@ -192,18 +192,37 @@ export default function AllocationWidget({ loading, holdings }) {
           </div>
 
           {/* Legend */}
-          <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'hidden', paddingRight: 14, display: 'flex', flexDirection: 'column', gap: 5, minHeight: 0, maxHeight: 320 }}>
-            {legendData.map((d, i) => (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: '10px 1fr 42px', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color }} />
-                <span style={{ fontSize: 11, color: '#e6edf3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={d.fullLabel ?? d.label}>
-                  {d.fullLabel ?? d.label}
-                </span>
-                <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#7d8590', textAlign: 'right' }}>
-                  {d.pct.toFixed(1)}%
-                </span>
-              </div>
-            ))}
+          <div
+            className="overflow-x-auto md:overflow-x-hidden scrollbar-hide"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              overflowY: 'auto',
+              paddingRight: 14,
+              minHeight: 0,
+              maxHeight: 320,
+              WebkitOverflowScrolling: 'touch',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+            }}
+          >
+            <div className="min-w-max md:min-w-0" style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {legendData.map((d, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '10px 1fr 42px', alignItems: 'center', gap: 6 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color }} />
+                  <span
+                    className="md:overflow-hidden md:text-ellipsis"
+                    style={{ fontSize: 11, color: '#e6edf3', whiteSpace: 'nowrap' }}
+                    title={d.fullLabel ?? d.label}
+                  >
+                    {d.fullLabel ?? d.label}
+                  </span>
+                  <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#7d8590', textAlign: 'right', flexShrink: 0 }}>
+                    {d.pct.toFixed(1)}%
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
