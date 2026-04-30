@@ -247,29 +247,19 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() - daysBack)
 
-    // Find snapshot closest to cutoff date
-    let closest = snapshots[0]
-    let closestDist = Infinity
-    for (const s of snapshots) {
-      const dist = Math.abs(new Date(s.date).getTime() - cutoff.getTime())
-      if (dist < closestDist) {
-        closestDist = dist
-        closest = s
-      }
-    }
+    // Find snapshot closest to cutoff date, ignoring zero-value snapshots
+    const validSnapshots = snapshots.filter((s) => s.net_worth !== 0 && s.net_worth != null)
+    const closest = validSnapshots.length > 0
+      ? validSnapshots.reduce((c, s) => {
+          const sDiff = Math.abs(new Date(s.date) - cutoff)
+          const cDiff = Math.abs(new Date(c.date) - cutoff)
+          return sDiff < cDiff ? s : c
+        }, validSnapshots[0])
+      : null
 
     const oldNw = closest?.net_worth || 0
     const changeDollar = latestNw - oldNw
     const changePct = oldNw > 0 ? (changeDollar / oldNw) * 100 : 0
-    console.log('Range calc:', {
-      range,
-      oldNw,
-      latestNw,
-      changeDollar,
-      changePct,
-      oldSnapshotDate: closest?.date,
-      snapshotCount: snapshots.length,
-    })
     return { changeDollar, changePct }
   }
 
