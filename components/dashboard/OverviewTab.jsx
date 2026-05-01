@@ -364,6 +364,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
             holdings={enrichedHoldings}
             sparklines={sparklines}
             onOpenDrawer={onOpenDrawer}
+            range={range}
           />
         </ErrorBoundary>
         <ErrorBoundary>

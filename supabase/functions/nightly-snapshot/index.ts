@@ -448,6 +448,38 @@ Deno.serve(async () => {
 
       if (upsertErr) throw new Error(upsertErr.message)
 
+      // Write per-holding snapshots for time-based return calculations
+      const { data: allHoldings } = await (supabase as any)
+        .schema('batchfolio')
+        .from('holdings')
+        .select('id, ticker, shares, last_synced_price, avg_cost_basis, account_id')
+        .in('account_id', activeAccounts.map((a: { id: string }) => a.id))
+
+      for (const holding of (allHoldings ?? []) as {
+        id: string; ticker: string; shares: number;
+        last_synced_price: number | null; avg_cost_basis: number; account_id: string
+      }[]) {
+        if (holding.ticker === 'CASH') continue
+
+        let price = holding.last_synced_price || 0
+        if (!price && priceMap[holding.ticker]) {
+          price = priceMap[holding.ticker]
+        }
+        if (price <= 0) continue
+
+        await (supabase as any)
+          .schema('batchfolio')
+          .from('holding_snapshots')
+          .upsert({
+            user_id: uid,
+            holding_id: holding.id,
+            ticker: holding.ticker,
+            price,
+            market_value: holding.shares * price,
+            date: today,
+          }, { onConflict: 'holding_id,date' })
+      }
+
       results.push({ uid, ok: true })
     } catch (err) {
       results.push({ uid, ok: false, error: String(err) })

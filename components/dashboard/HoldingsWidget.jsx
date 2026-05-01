@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Search } from 'lucide-react'
@@ -9,9 +9,38 @@ import Sparkline from '@/components/dashboard/Sparkline'
 const fmt = (v) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v ?? 0)
 
-export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDrawer }) {
+const RANGE_DAYS = { '7d': 7, '30d': 30, '90d': 90, '1y': 365 }
+const RANGE_BADGE = { '7d': '7D', '30d': '30D', '90d': '90D', '1y': '1Y' }
+
+export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDrawer, range = '7d' }) {
   const [search, setSearch] = useState('')
   const [mobileExpanded, setMobileExpanded] = useState(false)
+  const [historyMap, setHistoryMap] = useState({})
+
+  useEffect(() => {
+    if (loading || holdings.length === 0) return
+    const tickers = [...new Set(holdings.filter((h) => h.ticker !== 'CASH').map((h) => h.ticker))]
+    if (tickers.length === 0) return
+    const days = RANGE_DAYS[range] ?? 7
+    const map = {}
+    Promise.all(
+      tickers.map((ticker) =>
+        fetch(`/api/holdings/history?ticker=${ticker}&days=${days}`)
+          .then((r) => r.json())
+          .then((d) => { map[ticker] = d.history || [] })
+          .catch(() => { map[ticker] = [] }),
+      ),
+    ).then(() => setHistoryMap({ ...map }))
+  }, [holdings, range, loading])
+
+  function getHistoricalReturn(ticker) {
+    const history = historyMap[ticker] || []
+    if (history.length < 2) return null
+    const oldest = history[0]
+    const latest = history[history.length - 1]
+    if (!oldest.price || oldest.price === 0) return null
+    return ((latest.price - oldest.price) / oldest.price) * 100
+  }
 
   const filtered = search
     ? holdings.filter(
@@ -28,7 +57,7 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
     { label: 'Shares', align: 'text-right', width: 'w-[60px] flex-shrink-0' },
     { label: 'Price', align: 'text-right', width: 'w-[72px] flex-shrink-0' },
     { label: 'Value', align: 'text-right', width: 'w-[80px] flex-shrink-0' },
-    { label: 'Return', align: 'text-right', width: 'w-[70px] flex-shrink-0', title: 'Daily change for live tickers, all-time gain for cost-basis holdings, -- for others' },
+    { label: `Return (${RANGE_BADGE[range] ?? '7D'})`, align: 'text-right', width: 'w-[70px] flex-shrink-0', title: 'Historical return for the selected range, daily change if no history yet, -- if unavailable' },
   ]
 
   return (
@@ -141,24 +170,37 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
                   </span>
 
                   {/* Return % */}
-                  <span className="font-mono text-xs w-[70px] text-right flex-shrink-0 font-semibold flex items-center justify-end gap-1">
-                    {h.ticker === 'CASH' ? (
-                      <span style={{ color: '#7d8590' }}>--</span>
-                    ) : h.changePercent != null && h.changePercent !== 0 ? (
-                      <>
-                        <span style={{ fontSize: 9, color: '#7d8590', background: 'rgba(125,133,144,0.1)', borderRadius: 3, padding: '1px 4px', flexShrink: 0 }}>1D</span>
-                        <span style={{ color: h.changePercent >= 0 ? '#34d399' : '#f87171' }}>
-                          {h.changePercent >= 0 ? '+' : ''}{h.changePercent.toFixed(2)}%
-                        </span>
-                      </>
-                    ) : h.gainPct != null ? (
-                      <span style={{ color: h.positive ? '#34d399' : '#f87171' }}>
-                        {h.positive ? '+' : ''}{h.gainPct.toFixed(2)}%
+                  {(() => {
+                    const historicalPct = h.ticker !== 'CASH' ? getHistoricalReturn(h.ticker) : null
+                    const badge = RANGE_BADGE[range] ?? '7D'
+                    return (
+                      <span className="font-mono text-xs w-[70px] text-right flex-shrink-0 font-semibold flex items-center justify-end gap-1">
+                        {h.ticker === 'CASH' ? (
+                          <span style={{ color: '#7d8590' }}>--</span>
+                        ) : historicalPct != null ? (
+                          <>
+                            <span style={{ fontSize: 9, color: '#7d8590', background: 'rgba(125,133,144,0.1)', borderRadius: 3, padding: '1px 4px', flexShrink: 0 }}>{badge}</span>
+                            <span style={{ color: historicalPct >= 0 ? '#34d399' : '#f87171' }}>
+                              {historicalPct >= 0 ? '+' : ''}{historicalPct.toFixed(2)}%
+                            </span>
+                          </>
+                        ) : h.changePercent != null && h.changePercent !== 0 ? (
+                          <>
+                            <span style={{ fontSize: 9, color: '#7d8590', background: 'rgba(125,133,144,0.1)', borderRadius: 3, padding: '1px 4px', flexShrink: 0 }}>1D</span>
+                            <span style={{ color: h.changePercent >= 0 ? '#34d399' : '#f87171' }}>
+                              {h.changePercent >= 0 ? '+' : ''}{h.changePercent.toFixed(2)}%
+                            </span>
+                          </>
+                        ) : h.gainPct != null ? (
+                          <span style={{ color: h.positive ? '#34d399' : '#f87171' }}>
+                            {h.positive ? '+' : ''}{h.gainPct.toFixed(2)}%
+                          </span>
+                        ) : (
+                          <span style={{ color: '#7d8590' }}>--</span>
+                        )}
                       </span>
-                    ) : (
-                      <span style={{ color: '#7d8590' }}>--</span>
-                    )}
-                  </span>
+                    )
+                  })()}
                 </button>
               )
             })}
