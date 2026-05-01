@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import StockPriceChart from '@/components/StockPriceChart'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -49,6 +49,8 @@ export default function StockDrawer({ ticker, onClose }) {
   // null = unknown, true = synced fund (SimpleFIN), false = normal Finnhub
   const [isSyncedFund, setIsSyncedFund] = useState(null)
   const [syncedData, setSyncedData] = useState(null)
+  const [chartFallbackRange, setChartFallbackRange] = useState(null)
+  const skipNextChartFetch = useRef(false)
 
   useEffect(() => {
     if (!symbol) return
@@ -65,6 +67,8 @@ export default function StockDrawer({ ticker, onClose }) {
       setSyncedData(null)
       setIsSyncedFund(null)
       setCandles([])
+      setChartFallbackRange(null)
+      skipNextChartFetch.current = false
 
       try {
         const { data: holds } = await supabase
@@ -151,6 +155,10 @@ export default function StockDrawer({ ticker, onClose }) {
   const loadChart = useCallback(async () => {
     // Only load chart for non-synced holdings — wait until isSyncedFund is resolved
     if (!symbol || isSyncedFund !== false) return
+    if (skipNextChartFetch.current) {
+      skipNextChartFetch.current = false
+      return
+    }
     setChartLoading(true)
     try {
       const url = `/api/stock/chart?ticker=${symbol}&range=${range}`
@@ -158,6 +166,13 @@ export default function StockDrawer({ ticker, onClose }) {
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       setCandles(data.candles ?? [])
+      if (data.fallbackRange) {
+        setChartFallbackRange(data.fallbackRange)
+        skipNextChartFetch.current = true
+        setRange(data.fallbackRange)
+      } else {
+        setChartFallbackRange(null)
+      }
     } catch {
       // chart errors are non-fatal
     } finally {
@@ -200,7 +215,7 @@ export default function StockDrawer({ ticker, onClose }) {
                 <>
                   <p className="font-mono text-base text-[#10b981] font-semibold">{symbol}</p>
                   <p className="text-xs text-[#7d8590] mt-0.5">
-                    {isSyncedFund ? (syncedData?.description ?? symbol) : (quote?.name ?? '--')}
+                    {isSyncedFund ? (syncedData?.description ?? '--') : (quote?.name ?? '--')}
                   </p>
                 </>
               )}
@@ -272,7 +287,14 @@ export default function StockDrawer({ ticker, onClose }) {
               {chartLoading ? (
                 <Skeleton className="h-[120px]" />
               ) : (
-                <StockPriceChart candles={candles} />
+                <>
+                  <StockPriceChart candles={candles} />
+                  {chartFallbackRange && (
+                    <p className="text-[10px] text-[#7d8590] mt-1">
+                      Full history unavailable -- showing {chartFallbackRange} data
+                    </p>
+                  )}
+                </>
               )}
             </div>
           )}

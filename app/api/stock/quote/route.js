@@ -24,7 +24,7 @@ export async function GET(request) {
       low: quote.l ?? 0,
       open: quote.o ?? 0,
       previousClose: quote.pc ?? 0,
-      name: profile.name || ticker,
+      name: profile.name || null,
     })
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 })
