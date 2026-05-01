@@ -49,6 +49,7 @@ export default function StockDrawer({ ticker, onClose }) {
   // null = unknown, true = synced fund (SimpleFIN), false = normal Finnhub
   const [isSyncedFund, setIsSyncedFund] = useState(null)
   const [syncedData, setSyncedData] = useState(null)
+  const [companyName, setCompanyName] = useState(null)
   const [chartFallbackRange, setChartFallbackRange] = useState(null)
   const skipNextChartFetch = useRef(false)
 
@@ -66,6 +67,7 @@ export default function StockDrawer({ ticker, onClose }) {
       setPosition(null)
       setSyncedData(null)
       setIsSyncedFund(null)
+      setCompanyName(null)
       setCandles([])
       setChartFallbackRange(null)
       skipNextChartFetch.current = false
@@ -95,6 +97,7 @@ export default function StockDrawer({ ticker, onClose }) {
           // Finnhub returned a valid price — show full view
           setIsSyncedFund(false)
           setQuote(q)
+          setCompanyName(q.name || holdingsArr[0]?.description || null)
           const [f, n] = await Promise.all([
             fetch(`/api/stock/fundamentals?ticker=${symbol}`).then((r) => r.json()),
             fetch(`/api/stock/news?ticker=${symbol}`).then((r) => r.json()),
@@ -131,6 +134,7 @@ export default function StockDrawer({ ticker, onClose }) {
               price: lastSyncedPrice,
               description: holdingsArr[0].description || null,
             })
+            setCompanyName(holdingsArr[0]?.description || null)
             setPosition({ totalShares, avgCost, totalValue, totalCost: costBasisTotal, gainLoss, gainPct })
             setIsSyncedFund(true)
           } else {
@@ -214,9 +218,9 @@ export default function StockDrawer({ ticker, onClose }) {
               ) : (
                 <>
                   <p className="font-mono text-base text-[#10b981] font-semibold">{symbol}</p>
-                  <p className="text-xs text-[#7d8590] mt-0.5">
-                    {isSyncedFund ? (syncedData?.description ?? '--') : (quote?.name ?? '--')}
-                  </p>
+                  {companyName && (
+                    <p className="text-xs text-[#7d8590] mt-0.5">{companyName}</p>
+                  )}
                 </>
               )}
             </div>
