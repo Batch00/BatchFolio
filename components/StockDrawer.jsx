@@ -7,8 +7,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { X } from 'lucide-react'
 import { fmt, fmtMarketCap } from '@/lib/format'
+import { AreaChart, Area, Tooltip, ResponsiveContainer } from 'recharts'
 
 const RANGES = ['30d', '90d', '1y']
+const RANGE_DAYS = { '30d': 30, '90d': 90, '1y': 365 }
 
 function fmtNum(v, opts = {}) {
   if (v == null) return '--'
@@ -51,6 +53,7 @@ export default function StockDrawer({ ticker, onClose }) {
   const [syncedData, setSyncedData] = useState(null)
   const [companyName, setCompanyName] = useState(null)
   const [chartFallbackRange, setChartFallbackRange] = useState(null)
+  const [positionHistory, setPositionHistory] = useState([])
   const skipNextChartFetch = useRef(false)
 
   useEffect(() => {
@@ -69,6 +72,7 @@ export default function StockDrawer({ ticker, onClose }) {
       setIsSyncedFund(null)
       setCompanyName(null)
       setCandles([])
+      setPositionHistory([])
       setChartFallbackRange(null)
       skipNextChartFetch.current = false
 
@@ -188,7 +192,33 @@ export default function StockDrawer({ ticker, onClose }) {
     loadChart()
   }, [loadChart])
 
+  useEffect(() => {
+    if (!symbol || loading || !position) { setPositionHistory([]); return }
+    let cancelled = false
+    const days = RANGE_DAYS[range] || 30
+    fetch(`/api/holdings/history?ticker=${symbol}&days=${days}`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setPositionHistory(d.history || []) })
+      .catch(() => { if (!cancelled) setPositionHistory([]) })
+    return () => { cancelled = true }
+  }, [symbol, range, loading])
+
   const positive = (quote?.change ?? 0) >= 0
+
+  // Aggregate position history by date (multiple holdings of same ticker)
+  const posChartData = Object.values(
+    positionHistory.reduce((acc, p) => {
+      if (!acc[p.date]) acc[p.date] = { date: p.date, value: 0 }
+      acc[p.date].value += p.market_value
+      return acc
+    }, {}),
+  ).sort((a, b) => a.date.localeCompare(b.date))
+
+  const posFirst = posChartData[0]
+  const posLast = posChartData[posChartData.length - 1]
+  const posChange = posFirst && posLast ? posLast.value - posFirst.value : 0
+  const posChangePct = posFirst?.value > 0 ? (posChange / posFirst.value) * 100 : 0
+  const posPositive = posChange >= 0
 
   return (
     <>
@@ -269,11 +299,11 @@ export default function StockDrawer({ ticker, onClose }) {
         </div>
 
         <div className="stock-drawer-body">
-          {/* Chart — hidden for synced mutual funds */}
+          {/* Market Price chart — Finnhub only */}
           {isSyncedFund === false && (
             <div className="px-5 pt-3">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs text-[#7d8590]">Price</p>
+                <p className="text-[10px] uppercase tracking-[0.08em] text-[#7d8590] font-mono">Market Price</p>
                 <div className="flex gap-0.5 bg-[#21262d] rounded p-0.5">
                   {RANGES.map((r) => (
                     <button
@@ -303,6 +333,57 @@ export default function StockDrawer({ ticker, onClose }) {
             </div>
           )}
 
+          {/* Position Value chart — SimpleFIN only (prominent, before position stats) */}
+          {!loading && isSyncedFund === true && posChartData.length >= 2 && (
+            <div className="px-5 pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] uppercase tracking-[0.08em] text-[#7d8590] font-mono">Position Value</p>
+                <div className="flex gap-0.5 bg-[#21262d] rounded p-0.5">
+                  {RANGES.map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setRange(r)}
+                      className={`px-2 py-0.5 text-xs rounded font-mono transition-colors ${
+                        range === r ? 'bg-[#10b981] text-white' : 'text-[#7d8590] hover:text-[#e6edf3]'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={120}>
+                <AreaChart data={posChartData}>
+                  <defs>
+                    <linearGradient id="posGradSynced" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="value" stroke="#10b981" fill="url(#posGradSynced)" strokeWidth={1.5} dot={false} />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const d = payload[0].payload
+                      return (
+                        <div className="bg-[#161b22] border border-[#21262d] rounded px-2 py-1">
+                          <p className="text-[10px] text-[#7d8590]">{d.date}</p>
+                          <p className="font-mono text-xs text-[#e6edf3]">{fmt(d.value)}</p>
+                        </div>
+                      )
+                    }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+              <p className="mt-1">
+                <span className={`font-mono text-xs ${posPositive ? 'text-[#34d399]' : 'text-[#f87171]'}`}>
+                  {posPositive ? '+' : ''}{fmt(posChange)} ({posPositive ? '+' : ''}{posChangePct.toFixed(2)}%)
+                </span>
+                <span className="text-[10px] text-[#7d8590] ml-2">over selected range</span>
+              </p>
+            </div>
+          )}
+
           {/* Your position */}
           {!loading && position && (
             <div className="px-5 pt-4 border-t border-[#21262d]">
@@ -325,6 +406,42 @@ export default function StockDrawer({ ticker, onClose }) {
                   colored={position.gainLoss >= 0 ? 'text-[#34d399]' : 'text-[#f87171]'}
                 />
               </div>
+            </div>
+          )}
+
+          {/* Position Value chart — Finnhub tickers (after position stats) */}
+          {!loading && isSyncedFund === false && position && posChartData.length >= 2 && (
+            <div className="px-5 pt-4">
+              <p className="text-[10px] uppercase tracking-[0.08em] text-[#7d8590] font-mono mb-2">Position Value</p>
+              <ResponsiveContainer width="100%" height={80}>
+                <AreaChart data={posChartData}>
+                  <defs>
+                    <linearGradient id="posGradFinn" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="value" stroke="#10b981" fill="url(#posGradFinn)" strokeWidth={1.5} dot={false} />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const d = payload[0].payload
+                      return (
+                        <div className="bg-[#161b22] border border-[#21262d] rounded px-2 py-1">
+                          <p className="text-[10px] text-[#7d8590]">{d.date}</p>
+                          <p className="font-mono text-xs text-[#e6edf3]">{fmt(d.value)}</p>
+                        </div>
+                      )
+                    }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+              <p className="mt-1">
+                <span className={`font-mono text-xs ${posPositive ? 'text-[#34d399]' : 'text-[#f87171]'}`}>
+                  {posPositive ? '+' : ''}{fmt(posChange)} ({posPositive ? '+' : ''}{posChangePct.toFixed(2)}%)
+                </span>
+                <span className="text-[10px] text-[#7d8590] ml-2">over selected range</span>
+              </p>
             </div>
           )}
 
