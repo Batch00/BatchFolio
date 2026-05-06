@@ -74,7 +74,7 @@ function typeBadge(type) {
 function SortableAccountRow({
   acc, holdings, prices, expanded, toggleExpand, accountTotal, fmtBalanceDate,
   openEditAccount, deleteAccount, toggleExclude, openAddHolding, openEditHolding,
-  deleteHolding, onOpenDrawer, isDemo, isDuplicate,
+  deleteHolding, onOpenDrawer, isDemo, isDuplicate, historyMap,
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: acc.id })
   const style = {
@@ -90,6 +90,16 @@ function SortableAccountRow({
   const hasGainData = holdList.some(
     (h) => h.ticker !== 'CASH' && h.avg_cost_basis > 0 && (h.last_synced_price ?? 0) > 0
   )
+
+  function get7DReturn(ticker) {
+    if (ticker === 'CASH') return null
+    const history = historyMap[ticker]
+    if (!history || history.length < 2) return null
+    const oldest = history[0]
+    const latest = history[history.length - 1]
+    if (!oldest.price || oldest.price === 0) return null
+    return ((latest.price - oldest.price) / oldest.price) * 100
+  }
 
   return (
     <div
@@ -263,6 +273,7 @@ function SortableAccountRow({
                   <col style={{ width: 90 }} />
                   <col style={{ width: 100 }} />
                   {hasGainData && <col style={{ width: 80 }} />}
+                  <col className="hidden md:table-column" style={{ width: 70 }} />
                   <col style={{ width: 56 }} />
                 </colgroup>
                 <thead>
@@ -274,6 +285,7 @@ function SortableAccountRow({
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Price</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Value</th>
                     {hasGainData && <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Gain%</th>}
+                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">7D</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} />
                   </tr>
                 </thead>
@@ -337,6 +349,18 @@ function SortableAccountRow({
                             )}
                           </td>
                         )}
+                        <td style={{ padding: '6px 8px', textAlign: 'right' }} className="hidden md:table-cell">
+                          {(() => {
+                            const ret = get7DReturn(h.ticker)
+                            if (ret === null) return <span className="font-mono text-xs text-[#7d8590]">--</span>
+                            const pos = ret >= 0
+                            return (
+                              <span className={`font-mono text-xs ${pos ? 'text-[#34d399]' : 'text-[#f87171]'}`}>
+                                {pos ? '+' : ''}{ret.toFixed(2)}%
+                              </span>
+                            )
+                          })()}
+                        </td>
                         <td style={{ padding: '6px 8px', textAlign: 'right' }}>
                           <div className="flex items-center justify-end">
                             {!h.is_synced && (
@@ -441,6 +465,9 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
   const [editLiabError, setEditLiabError] = useState(null)
   const [editLiabIsSynced, setEditLiabIsSynced] = useState(false)
 
+  // 7D return history
+  const [historyMap, setHistoryMap] = useState({})
+
   // Toast state
   const [toast, setToast] = useState(null)
 
@@ -523,6 +550,33 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  // Fetch 7D history for tickers in expanded accounts
+  useEffect(() => {
+    const expandedIds = Object.keys(expanded).filter((id) => expanded[id])
+    if (expandedIds.length === 0) return
+    const tickers = new Set()
+    for (const id of expandedIds) {
+      for (const h of holdings[id] ?? []) {
+        if (h.ticker !== 'CASH' && !historyMap[h.ticker]) tickers.add(h.ticker)
+      }
+    }
+    if (tickers.size === 0) return
+    Promise.all(
+      [...tickers].map((t) =>
+        fetch(`/api/holdings/history?ticker=${encodeURIComponent(t)}&days=7`)
+          .then((r) => r.json())
+          .then((d) => ({ t, history: d.history ?? [] }))
+          .catch(() => ({ t, history: [] }))
+      )
+    ).then((results) => {
+      setHistoryMap((prev) => {
+        const next = { ...prev }
+        for (const { t, history } of results) next[t] = history
+        return next
+      })
+    })
+  }, [expanded, holdings])
 
   function accountTotal(acc) {
     if (acc.is_synced && acc.balance > 0) return acc.balance
@@ -864,6 +918,7 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                     onOpenDrawer={onOpenDrawer}
                     isDemo={isDemo}
                     isDuplicate={!acc.is_synced && duplicateProviders.has(acc.provider)}
+                    historyMap={historyMap}
                   />
                 ))}
               </div>
