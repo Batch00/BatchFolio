@@ -113,6 +113,15 @@ export async function POST() {
     const sfData = await sfRes.json()
     const sfAccounts = sfData.accounts ?? []
 
+    // Temporary debug logging for Voya
+    const voyaAccount = sfAccounts.find(a =>
+      a.name?.toLowerCase().includes('voya') ||
+      a.org?.name?.toLowerCase().includes('voya')
+    )
+    if (voyaAccount) {
+      console.log('VOYA account full data:', JSON.stringify(voyaAccount, null, 2))
+    }
+
     // Parse connection errors from SimpleFIN response
     const sfErrors = sfData.errors ?? []
     const connectionErrors = sfErrors

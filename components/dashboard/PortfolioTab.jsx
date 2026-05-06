@@ -5,7 +5,6 @@ import { createClient } from '@/lib/supabase'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { ChevronUp, ChevronDown } from 'lucide-react'
-import Sparkline from '@/components/dashboard/Sparkline'
 import { fmt, fmtShares } from '@/lib/format'
 
 const COLORS = [
@@ -25,7 +24,7 @@ const COLS = [
   { key: 'shares', label: 'Shares', numeric: true, hideMobile: true },
   { key: 'avgCost', label: 'Avg Cost', numeric: true, hideMobile: true },
   { key: 'livePrice', label: 'Price', numeric: true },
-  { key: 'sparkline', label: '7D', numeric: true, noSort: true, hideMobile: true },
+  { key: 'ret7d', label: '7D', numeric: true, noSort: true, hideMobile: true },
   { key: 'value', label: 'Value', numeric: true },
   { key: 'gainLoss', label: 'Gain/Loss $', numeric: true, hideMobile: true },
   { key: 'gainPct', label: 'Gain/Loss %', numeric: true },
@@ -77,7 +76,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
   const supabase = createClient()
   const [rows, setRows] = useState([])
   const [accounts, setAccounts] = useState([])
-  const [sparklines, setSparklines] = useState({})
+  const [historyMap, setHistoryMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [sortKey, setSortKey] = useState('value')
@@ -235,26 +234,34 @@ export default function PortfolioTab({ onOpenDrawer }) {
     setLoading(false)
 
     if (tickers.length > 0) {
-      Promise.all(
-        tickers.map((t) =>
-          fetch(`/api/stock/sparkline?ticker=${t}`)
-            .then((r) => r.json())
-            .then((d) => ({ t, prices: d.prices ?? [] }))
-            .catch(() => ({ t, prices: [] })),
-        ),
-      ).then((results) => {
-        const map = {}
-        results.forEach(({ t, prices }) => {
-          map[t] = prices
-        })
-        setSparklines(map)
-      })
+      const histMap = {}
+      await Promise.all(
+        tickers.map(async (t) => {
+          try {
+            const res = await fetch(`/api/holdings/history?ticker=${encodeURIComponent(t)}&days=7`)
+            const data = await res.json()
+            histMap[t] = data.history || []
+          } catch {
+            histMap[t] = []
+          }
+        }),
+      )
+      setHistoryMap(histMap)
     }
   }, [])
 
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  function get7DReturn(ticker) {
+    const history = historyMap[ticker] || []
+    if (history.length < 2) return null
+    const oldest = history[0]
+    const latest = history[history.length - 1]
+    if (!oldest.price || oldest.price === 0) return null
+    return ((latest.price - oldest.price) / oldest.price) * 100
+  }
 
   function handleSort(key) {
     if (sortKey === key) {
@@ -400,7 +407,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                 background:
                   selectedAccountId === acc.id ? 'rgba(16,185,129,0.12)' : 'transparent',
                 color: selectedAccountId === acc.id ? '#10b981' : '#7d8590',
-                maxWidth: 120,
+                maxWidth: 160,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
@@ -740,26 +747,23 @@ export default function PortfolioTab({ onOpenDrawer }) {
                           {h.hasPrice ? fmt(h.livePrice) : '--'}
                         </td>
                         <td className="px-3 py-2.5 text-right hidden md:table-cell">
-                          {sparklines[h.ticker] ? (
-                            <div className="inline-flex justify-end">
-                              <Sparkline
-                                prices={sparklines[h.ticker]}
-                                positive={positive}
-                                width={60}
-                                height={28}
-                              />
-                            </div>
-                          ) : (
-                            <div
-                              style={{
-                                display: 'inline-block',
-                                width: 60,
-                                height: 28,
-                                background: '#21262d',
-                                borderRadius: 2,
-                              }}
-                            />
-                          )}
+                          {(() => {
+                            const ret7d = get7DReturn(h.ticker)
+                            if (h.ticker === 'CASH' || ret7d === null) {
+                              return <span className="font-mono text-[#7d8590]" style={{ fontSize: 12 }}>--</span>
+                            }
+                            return (
+                              <span
+                                className="font-mono"
+                                style={{
+                                  color: ret7d >= 0 ? '#34d399' : '#f87171',
+                                  fontSize: 12,
+                                }}
+                              >
+                                {ret7d >= 0 ? '+' : ''}{ret7d.toFixed(2)}%
+                              </span>
+                            )
+                          })()}
                         </td>
                         <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right">
                           {h.hasPrice ? fmt(h.value) : '--'}
