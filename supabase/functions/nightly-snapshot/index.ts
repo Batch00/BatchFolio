@@ -61,6 +61,18 @@ async function syncSimpleFINForUser(
     if (!sfRes.ok) return
 
     const sfData = await sfRes.json()
+
+    // Parse connection errors from SimpleFIN response
+    const sfErrors: { code?: string; message?: string; conn_id?: string }[] = sfData.errors ?? []
+    const connectionErrors = sfErrors
+      .filter((e) => e.code && e.message)
+      .map((e) => ({
+        code: e.code,
+        message: e.message,
+        conn_id: e.conn_id || null,
+        detected_at: new Date().toISOString(),
+      }))
+
     const sfAccounts: {
       id: string
       name: string
@@ -328,7 +340,10 @@ async function syncSimpleFINForUser(
     }
 
     await (supabase as any).schema('batchfolio').from('simplefin_connections')
-      .update({ last_synced_at: new Date().toISOString() })
+      .update({
+        last_synced_at: new Date().toISOString(),
+        connection_errors: connectionErrors.length > 0 ? connectionErrors : null,
+      })
       .eq('user_id', uid)
   } catch {
     // Sync failure is non-fatal - proceed with snapshot using existing data

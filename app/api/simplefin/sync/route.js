@@ -113,6 +113,17 @@ export async function POST() {
     const sfData = await sfRes.json()
     const sfAccounts = sfData.accounts ?? []
 
+    // Parse connection errors from SimpleFIN response
+    const sfErrors = sfData.errors ?? []
+    const connectionErrors = sfErrors
+      .filter((e) => e.code && e.message)
+      .map((e) => ({
+        code: e.code,
+        message: e.message,
+        conn_id: e.conn_id || null,
+        detected_at: new Date().toISOString(),
+      }))
+
     let accountsSynced = 0
     let holdingsSynced = 0
     let transactionsSynced = 0
@@ -417,10 +428,13 @@ export async function POST() {
       }
     }
 
-    // Update last_synced_at
+    // Update last_synced_at and connection errors
     await supabase
       .from('simplefin_connections')
-      .update({ last_synced_at: new Date().toISOString() })
+      .update({
+        last_synced_at: new Date().toISOString(),
+        connection_errors: connectionErrors.length > 0 ? connectionErrors : null,
+      })
       .eq('user_id', user.id)
 
     return Response.json({ success: true, accountsSynced, holdingsSynced, transactionsSynced, failedHoldings, failedTransactions })

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Input } from '@/components/ui/input'
+import { TriangleAlert } from 'lucide-react'
 
 function relativeTime(isoString) {
   if (!isoString) return null
@@ -44,7 +45,7 @@ export default function SettingsTab({ isDemo, onDemoBlock }) {
     setLoadingConn(true)
     const { data } = await supabase
       .from('simplefin_connections')
-      .select('last_synced_at')
+      .select('last_synced_at, connection_errors')
       .maybeSingle()
     setConnection(data ?? null)
     setLoadingConn(false)
@@ -121,7 +122,7 @@ export default function SettingsTab({ isDemo, onDemoBlock }) {
 
   return (
     <div className="p-4 max-w-xl space-y-6">
-      {/* Bank Sync Section */}
+      {/* Account Sync Section */}
       <div
         className="bg-[#161b22] border border-[#21262d] rounded-md p-4 space-y-4"
       >
@@ -129,7 +130,7 @@ export default function SettingsTab({ isDemo, onDemoBlock }) {
           className="text-[10px] uppercase text-[#7d8590] font-mono"
           style={{ letterSpacing: '0.08em' }}
         >
-          Bank Sync
+          Account Sync
         </p>
 
         {isDemo ? (
@@ -153,8 +154,45 @@ export default function SettingsTab({ isDemo, onDemoBlock }) {
             {connection.last_synced_at && (
               <p className="text-xs text-[#7d8590]">
                 Last synced: {relativeTime(connection.last_synced_at)}
+                {connection.connection_errors?.length > 0 ? (
+                  <span className="text-[#fbbf24]" style={{ fontSize: 10 }}> - some accounts need attention</span>
+                ) : (
+                  <span className="text-[#34d399]" style={{ fontSize: 10 }}> - all accounts syncing normally</span>
+                )}
               </p>
             )}
+
+            {connection.connection_errors?.length > 0 && (
+              <div
+                style={{
+                  background: 'rgba(251,191,36,0.08)',
+                  border: '1px solid rgba(251,191,36,0.2)',
+                  borderRadius: 6,
+                  padding: 12,
+                  marginBottom: 12,
+                }}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <TriangleAlert style={{ width: 14, height: 14, color: '#fbbf24', flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: '#fbbf24', fontWeight: 500 }}>Action required</span>
+                </div>
+                {connection.connection_errors.map((err, i) => (
+                  <p key={i} style={{ fontSize: 11, color: '#fbbf24', marginBottom: 2 }}>
+                    {err.message}
+                  </p>
+                ))}
+                <a
+                  href="https://beta-bridge.simplefin.org"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:underline"
+                  style={{ fontSize: 11, color: '#fbbf24', marginTop: 6, display: 'inline-block' }}
+                >
+                  Open SimpleFIN Bridge &rarr;
+                </a>
+              </div>
+            )}
+
             {syncError && (
               <p className="text-xs text-[#f87171]">{syncError}</p>
             )}
