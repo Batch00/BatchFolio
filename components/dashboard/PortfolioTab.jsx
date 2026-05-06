@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { ChevronUp, ChevronDown } from 'lucide-react'
 import Sparkline from '@/components/dashboard/Sparkline'
-import { fmt } from '@/lib/format'
+import { fmt, fmtShares } from '@/lib/format'
 
 const COLORS = [
   '#10b981',
@@ -731,7 +731,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                           {h.account}
                         </td>
                         <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right hidden md:table-cell">
-                          {h.shares}
+                          {fmtShares(h.shares)}
                         </td>
                         <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right hidden md:table-cell">
                           {h.avgCost > 0 ? fmt(h.avgCost) : '--'}

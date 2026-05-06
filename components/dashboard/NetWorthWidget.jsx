@@ -1,7 +1,7 @@
 'use client'
 
 import { Skeleton } from '@/components/ui/skeleton'
-import { fmt, fmtCompact } from '@/lib/format'
+import { fmt } from '@/lib/format'
 
 const RANGES = [
   { id: '7d', label: '7D' },
@@ -75,7 +75,7 @@ export default function NetWorthWidget({
                 Assets
               </p>
               <p className="font-mono text-[13px] text-[#e6edf3]">
-                {fmtCompact(totalAssets)}
+                {fmt(totalAssets)}
               </p>
             </div>
             <div className="bg-[#0d1117] rounded px-2.5 py-2 flex-1" title="Total outstanding debt and credit balances">
@@ -86,7 +86,7 @@ export default function NetWorthWidget({
                 Liabilities
               </p>
               <p className="font-mono text-[13px] text-[#f87171]">
-                {fmtCompact(totalLiabilities)}
+                {fmt(totalLiabilities)}
               </p>
             </div>
           </div>

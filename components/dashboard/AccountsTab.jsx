@@ -31,7 +31,7 @@ import { Trash2, Plus, ChevronDown, ChevronRight, Pencil, RefreshCw, EyeOff, Eye
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { fmt } from '@/lib/format'
+import { fmt, fmtShares } from '@/lib/format'
 
 function fmtDate(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
@@ -315,7 +315,7 @@ function SortableAccountRow({
                           </p>
                         </td>
                         <td style={{ padding: '6px 8px', textAlign: 'right' }} className="hidden md:table-cell">
-                          <span className="font-mono text-xs text-[#e6edf3]">{isCash ? '-' : h.shares}</span>
+                          <span className="font-mono text-xs text-[#e6edf3]">{isCash ? '-' : fmtShares(h.shares)}</span>
                         </td>
                         <td style={{ padding: '6px 8px', textAlign: 'right' }} className="hidden md:table-cell">
                           <span className="font-mono text-xs text-[#e6edf3]">{isCash ? '-' : fmt(h.avg_cost_basis > 0 ? h.avg_cost_basis : 0)}</span>

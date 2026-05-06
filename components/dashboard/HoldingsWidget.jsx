@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Search } from 'lucide-react'
 import Sparkline from '@/components/dashboard/Sparkline'
+import { fmtShares } from '@/lib/format'
 
 const fmt = (v) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v ?? 0)
@@ -156,7 +157,7 @@ export default function HoldingsWidget({ loading, holdings, sparklines, onOpenDr
 
                   {/* Shares */}
                   <span className="font-mono text-xs text-[#e6edf3] w-[60px] text-right flex-shrink-0 hidden md:block">
-                    {h.shares}
+                    {fmtShares(h.shares)}
                   </span>
 
                   {/* Price */}

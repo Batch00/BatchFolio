@@ -6,7 +6,7 @@ import StockPriceChart from '@/components/StockPriceChart'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { X } from 'lucide-react'
-import { fmt, fmtMarketCap } from '@/lib/format'
+import { fmt, fmtMarketCap, fmtShares } from '@/lib/format'
 import { AreaChart, Area, Tooltip, ResponsiveContainer } from 'recharts'
 
 const RANGES = ['30d', '90d', '1y']
@@ -391,7 +391,7 @@ export default function StockDrawer({ ticker, onClose }) {
               <div className="bg-[#0d1117] border border-[#21262d] rounded-md px-3 py-1">
                 <StatRow
                   label="Shares"
-                  value={fmtNum(position.totalShares, { maximumFractionDigits: 4 })}
+                  value={fmtShares(position.totalShares)}
                 />
                 <StatRow label="Avg Cost" value={fmt(position.avgCost)} />
                 <StatRow label="Total Value" value={fmt(position.totalValue)} />
