@@ -20,7 +20,6 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   const [watchlist, setWatchlist] = useState([])
   const [liveLiabilities, setLiveLiabilities] = useState([])
   const [liveAccounts, setLiveAccounts] = useState([])
-  const [moversHoldings, setMoversHoldings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [range, setRange] = useState('7d')
@@ -105,26 +104,9 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
       h.ticker === 'CASH' ? { ...h, _accountName: accountNameMap[h.account_id] ?? '' } : h
     )
 
-    // Step 4: build movers now while liveQuoteMap is in scope — dedupe tickers, require real changePercent
-    const seenMovers = new Set()
-    const computedMovers = annotatedHoldings
-      .filter((h) => {
-        if (h.ticker === 'CASH' || seenMovers.has(h.ticker)) return false
-        seenMovers.add(h.ticker)
-        const q = liveQuoteMap[h.ticker]
-        return q && Math.abs(q.changePercent) > 0.001
-      })
-      .map((h) => ({
-        ...h,
-        changePercent: liveQuoteMap[h.ticker].changePercent,
-      }))
-      .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
-      .slice(0, 5)
-
     setSnapshots(snapshotsRes.data ?? [])
     setHoldings(annotatedHoldings)
     setPrices(priceMap)
-    setMoversHoldings(computedMovers)
     setWatchlist(wlItems)
     setLiveLiabilities(liabRes.data ?? [])
     setLiveAccounts(allAccounts)
@@ -371,12 +353,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
           <AllocationWidget loading={loading} holdings={enrichedHoldings} />
         </ErrorBoundary>
         <ErrorBoundary>
-          <MoversWidget
-            loading={loading}
-            holdings={moversHoldings}
-            prices={prices}
-            onOpenDrawer={onOpenDrawer}
-          />
+          <MoversWidget onOpenDrawer={onOpenDrawer} />
         </ErrorBoundary>
       </div>
 
