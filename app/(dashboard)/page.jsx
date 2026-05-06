@@ -11,7 +11,7 @@ import WatchlistTab from '@/components/dashboard/WatchlistTab'
 import TransactionsTab from '@/components/dashboard/TransactionsTab'
 import SettingsTab from '@/components/dashboard/SettingsTab'
 import StockDrawer from '@/components/StockDrawer'
-import { LayoutDashboard, Briefcase, PieChart, Star, Settings2, X, Receipt } from 'lucide-react'
+import { LayoutDashboard, Briefcase, PieChart, Star, Settings2, X, Receipt, TriangleAlert } from 'lucide-react'
 import { DEMO_EMAIL } from '@/lib/constants'
 
 const TABS = [
@@ -44,6 +44,10 @@ export default function App() {
   const [demoToast, setDemoToast] = useState(false)
   const demoToastTimerRef = useRef(null)
 
+  // SimpleFIN connection errors
+  const [connErrors, setConnErrors] = useState(null)
+  const [connErrorDismissed, setConnErrorDismissed] = useState(false)
+
   const isDemo = user?.email === DEMO_EMAIL
   const updateAvailable =
     initialVersionRef.current &&
@@ -69,6 +73,20 @@ export default function App() {
       setUser(u)
     })
   }, [])
+
+  // Check SimpleFIN connection errors
+  useEffect(() => {
+    if (!user || user.email === DEMO_EMAIL) return
+    supabase
+      .from('simplefin_connections')
+      .select('connection_errors')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.connection_errors?.length > 0) {
+          setConnErrors(data.connection_errors)
+        }
+      })
+  }, [user])
 
   // Version polling
   useEffect(() => {
@@ -169,6 +187,40 @@ export default function App() {
             </a>{' '}
             to save your own portfolio.
           </span>
+        </div>
+      )}
+
+      {/* SimpleFIN re-auth warning banner */}
+      {!isDemo && connErrors && !connErrorDismissed && (
+        <div
+          className="flex items-center flex-shrink-0"
+          style={{
+            background: 'rgba(251,191,36,0.08)',
+            borderBottom: '1px solid rgba(251,191,36,0.2)',
+            padding: '8px 20px',
+            gap: 8,
+          }}
+        >
+          <TriangleAlert style={{ width: 14, height: 14, color: '#fbbf24', flexShrink: 0 }} />
+          <span style={{ color: '#fbbf24', fontSize: 12, flex: 1 }}>
+            One or more accounts need re-authorization in SimpleFIN Bridge.
+            <a
+              href="https://beta-bridge.simplefin.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+              style={{ color: '#fbbf24', marginLeft: 4 }}
+            >
+              Open SimpleFIN &rarr;
+            </a>
+          </span>
+          <button
+            onClick={() => setConnErrorDismissed(true)}
+            style={{ color: '#fbbf24', flexShrink: 0 }}
+            aria-label="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
 

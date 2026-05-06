@@ -203,27 +203,10 @@ export default function TopBar({
         </div>
 
         {/* Center: net worth */}
-        <div className="flex items-center justify-center gap-2">
-          {netWorth != null ? (
-            <>
-              <span className="font-mono font-semibold text-[#e6edf3]" style={{ fontSize: 14 }}>
-                {fmt(netWorth)}
-              </span>
-              {netWorthChange != null && (
-                <span
-                  className={`font-mono flex-shrink-0 ${
-                    netWorthChangePositive ? 'text-[#34d399]' : 'text-[#f87171]'
-                  }`}
-                  style={{ fontSize: 12 }}
-                >
-                  {netWorthChangePositive ? '+' : ''}
-                  {fmt(netWorthChange)}
-                </span>
-              )}
-            </>
-          ) : (
-            <span className="font-mono text-xs text-[#7d8590]">--</span>
-          )}
+        <div className="flex items-center justify-center">
+          <span className="font-mono font-semibold text-[#e6edf3]" style={{ fontSize: 14 }}>
+            {netWorth != null ? fmt(netWorth) : '--'}
+          </span>
         </div>
 
         {/* Right actions */}
