@@ -84,17 +84,16 @@ export async function POST() {
       return Response.json({ error: 'No SimpleFIN connection' }, { status: 400 })
     }
 
-    // TEMPORARY DEBUG - rate limit disabled for testing
-    // if (conn.last_synced_at) {
-    //   const lastSync = new Date(conn.last_synced_at)
-    //   const oneHourAgo = new Date(Date.now() - SYNC_RATE_LIMIT_MS)
-    //   if (lastSync > oneHourAgo) {
-    //     return Response.json({
-    //       alreadySynced: true,
-    //       message: 'Already synced recently. SimpleFIN updates once per day.'
-    //     })
-    //   }
-    // }
+    if (conn.last_synced_at) {
+      const lastSync = new Date(conn.last_synced_at)
+      const oneHourAgo = new Date(Date.now() - SYNC_RATE_LIMIT_MS)
+      if (lastSync > oneHourAgo) {
+        return Response.json({
+          alreadySynced: true,
+          message: 'Already synced recently. SimpleFIN updates once per day.'
+        })
+      }
+    }
 
     // Parse access URL for credentials
     const url = new URL(conn.access_url)
@@ -114,14 +113,6 @@ export async function POST() {
     const sfData = await sfRes.json()
     const sfAccounts = sfData.accounts ?? []
 
-    // Temporary debug logging for Voya
-    const voyaAccount = sfAccounts.find(a =>
-      a.name?.toLowerCase().includes('voya') ||
-      a.org?.name?.toLowerCase().includes('voya')
-    )
-    if (voyaAccount) {
-      console.log('VOYA account full data:', JSON.stringify(voyaAccount, null, 2))
-    }
 
     // Parse connection errors from SimpleFIN response
     const sfErrors = sfData.errors ?? []
@@ -447,21 +438,7 @@ export async function POST() {
       })
       .eq('user_id', user.id)
 
-    return Response.json({
-      success: true,
-      accountsSynced,
-      holdingsSynced,
-      transactionsSynced,
-      failedHoldings,
-      failedTransactions,
-      // TEMPORARY DEBUG - remove after checking
-      debugAccounts: sfAccounts.map(a => ({
-        name: a.name,
-        org: a.org?.name,
-        holdingsCount: a.holdings?.length ?? 0,
-        balance: a.balance
-      }))
-    })
+    return Response.json({ success: true, accountsSynced, holdingsSynced, transactionsSynced, failedHoldings, failedTransactions })
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 })
   }

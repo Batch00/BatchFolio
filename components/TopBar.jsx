@@ -182,20 +182,22 @@ export default function TopBar({
             </div>
           </div>
 
-          <div className="flex items-center flex-shrink-0">
-            {TABS.map(({ id, label }) => {
+          <div className="flex items-center min-w-0 flex-shrink">
+            {TABS.map(({ id, label, icon: Icon }) => {
               const active = activeTab === id
               return (
                 <button
                   key={id}
                   onClick={() => onTabChange(id)}
-                  className={`h-12 flex items-center px-3 border-b-2 text-[11px] uppercase tracking-widest font-medium transition-colors ${
+                  className={`h-12 flex items-center px-2 lg:px-3 border-b-2 text-[11px] uppercase tracking-widest font-medium transition-colors ${
                     active
                       ? 'border-[#10b981] text-[#10b981]'
                       : 'border-transparent text-[#7d8590] hover:text-[#e6edf3]'
                   }`}
+                  title={label}
                 >
-                  {label}
+                  <Icon className="h-4 w-4 lg:hidden flex-shrink-0" />
+                  <span className="hidden lg:inline">{label}</span>
                 </button>
               )
             })}
@@ -203,15 +205,15 @@ export default function TopBar({
         </div>
 
         {/* Center: net worth */}
-        <div className="flex items-center justify-center">
-          <span className="font-mono font-semibold text-[#e6edf3]" style={{ fontSize: 14 }}>
+        <div className="flex items-center justify-center min-w-0 flex-shrink overflow-hidden">
+          <span className="font-mono font-semibold text-[#e6edf3] whitespace-nowrap truncate" style={{ fontSize: 14 }}>
             {netWorth != null ? fmt(netWorth) : '--'}
           </span>
         </div>
 
         {/* Right actions */}
-        <div className="flex items-center justify-end gap-2">
-          <div className="flex items-center gap-1.5 border border-[#21262d] rounded px-2 py-1">
+        <div className="flex items-center justify-end gap-2 flex-shrink-0">
+          <div className="hidden lg:flex items-center gap-1.5 border border-[#21262d] rounded px-2 py-1">
             <span
               className="inline-flex h-2 w-2 rounded-full bg-[#10b981]"
               style={{ animation: 'live-pulse 2s infinite' }}

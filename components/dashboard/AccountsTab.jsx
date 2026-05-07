@@ -87,7 +87,7 @@ function SortableAccountRow({
   const holdList = mergeHoldings(holdings[acc.id] ?? [])
   const isExpanded = expanded[acc.id]
   const isExcluded = acc.is_excluded ?? false
-  const hasNonCash = holdList.some((h) => h.ticker !== 'CASH')
+  const hasGainData = holdList.some((h) => h.ticker !== 'CASH' && h.avg_cost_basis > 0)
 
   function get7DReturn(ticker) {
     if (ticker === 'CASH') return null
@@ -270,7 +270,7 @@ function SortableAccountRow({
                   <col className="hidden md:table-column" style={{ width: 90 }} />
                   <col style={{ width: 90 }} />
                   <col style={{ width: 100 }} />
-                  {hasNonCash && <col style={{ width: 80 }} />}
+                  {hasGainData && <col style={{ width: 80 }} />}
                   <col className="hidden md:table-column" style={{ width: 70 }} />
                   <col style={{ width: 56 }} />
                 </colgroup>
@@ -282,7 +282,7 @@ function SortableAccountRow({
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">Avg Cost</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Price</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Value</th>
-                    {hasNonCash && <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Gain%</th>}
+                    {hasGainData && <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Gain%</th>}
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">7D</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} />
                   </tr>
@@ -336,7 +336,7 @@ function SortableAccountRow({
                         <td style={{ padding: '6px 8px', textAlign: 'right' }}>
                           <span className="font-mono text-xs text-[#e6edf3]">{fmt(value)}</span>
                         </td>
-                        {hasNonCash && (
+                        {hasGainData && (
                           <td style={{ padding: '6px 8px', textAlign: 'right' }}>
                             {isCash || costBasis <= 0 ? (
                               <span className="font-mono text-xs text-[#7d8590]">--</span>
