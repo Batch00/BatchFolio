@@ -84,16 +84,17 @@ export async function POST() {
       return Response.json({ error: 'No SimpleFIN connection' }, { status: 400 })
     }
 
-    if (conn.last_synced_at) {
-      const lastSync = new Date(conn.last_synced_at)
-      const oneHourAgo = new Date(Date.now() - SYNC_RATE_LIMIT_MS)
-      if (lastSync > oneHourAgo) {
-        return Response.json({
-          alreadySynced: true,
-          message: 'Already synced recently. SimpleFIN updates once per day.'
-        })
-      }
-    }
+    // TEMPORARY DEBUG - rate limit disabled for testing
+    // if (conn.last_synced_at) {
+    //   const lastSync = new Date(conn.last_synced_at)
+    //   const oneHourAgo = new Date(Date.now() - SYNC_RATE_LIMIT_MS)
+    //   if (lastSync > oneHourAgo) {
+    //     return Response.json({
+    //       alreadySynced: true,
+    //       message: 'Already synced recently. SimpleFIN updates once per day.'
+    //     })
+    //   }
+    // }
 
     // Parse access URL for credentials
     const url = new URL(conn.access_url)
@@ -446,7 +447,21 @@ export async function POST() {
       })
       .eq('user_id', user.id)
 
-    return Response.json({ success: true, accountsSynced, holdingsSynced, transactionsSynced, failedHoldings, failedTransactions })
+    return Response.json({
+      success: true,
+      accountsSynced,
+      holdingsSynced,
+      transactionsSynced,
+      failedHoldings,
+      failedTransactions,
+      // TEMPORARY DEBUG - remove after checking
+      debugAccounts: sfAccounts.map(a => ({
+        name: a.name,
+        org: a.org?.name,
+        holdingsCount: a.holdings?.length ?? 0,
+        balance: a.balance
+      }))
+    })
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 })
   }
