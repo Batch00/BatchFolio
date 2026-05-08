@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Settings, LayoutDashboard, Briefcase, PieChart, Star, ShieldCheck, Plus, Receipt } from 'lucide-react'
+import { Settings, LayoutDashboard, Briefcase, PieChart, Star, ShieldCheck, Plus, Receipt, RefreshCw } from 'lucide-react'
 import TickerSearch from '@/components/dashboard/TickerSearch'
 import { fmt } from '@/lib/format'
 
@@ -222,6 +222,15 @@ export default function TopBar({
           </div>
 
           <button
+            onClick={() => window.location.reload()}
+            className="text-[#7d8590] hover:text-[#e6edf3] transition-colors"
+            title="Refresh"
+            style={{ border: '1px solid #21262d', background: 'transparent', borderRadius: 5, padding: '5px 10px' }}
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+
+          <button
             onClick={handleOpen}
             className="border border-[#10b981]/50 bg-[rgba(16,185,129,0.06)] text-[#10b981] hover:bg-[rgba(16,185,129,0.12)] hover:border-[#10b981] transition-colors rounded px-2.5 py-1 text-[11px] uppercase tracking-wider"
           >
@@ -274,6 +283,14 @@ export default function TopBar({
               <ShieldCheck className="h-4 w-4" />
             </Link>
           )}
+          <button
+            onClick={() => window.location.reload()}
+            className="text-[#7d8590] hover:text-[#e6edf3] transition-colors flex items-center justify-center"
+            title="Refresh"
+            style={{ minWidth: 44, minHeight: 44 }}
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
           <button
             onClick={handleOpen}
             className="border border-[#10b981]/50 bg-[rgba(16,185,129,0.06)] text-[#10b981] hover:bg-[rgba(16,185,129,0.12)] hover:border-[#10b981] transition-colors rounded flex items-center justify-center"
