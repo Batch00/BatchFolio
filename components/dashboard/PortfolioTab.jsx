@@ -840,6 +840,9 @@ export default function PortfolioTab({ onOpenDrawer }) {
             </tbody>
           </table>
         </div>
+        <p style={{ fontSize: 10, color: '#7d8590', textAlign: 'right', marginTop: 4, paddingRight: 12 }}>
+          Based on live prices
+        </p>
       </div>
     </div>
   )

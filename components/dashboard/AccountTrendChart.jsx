@@ -4,14 +4,22 @@ import { useState, useEffect, useRef } from 'react'
 import {
   AreaChart,
   Area,
+  ReferenceLine,
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
 import { fmt } from '@/lib/format'
 
-function formatDateFull(dateStr) {
-  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
+const formatDate = (dateStr) => {
+  if (!dateStr) return ''
+  const clean = dateStr.split('T')[0]
+  const parts = clean.split('-')
+  if (parts.length !== 3) return dateStr
+  const year = parseInt(parts[0])
+  const month = parseInt(parts[1]) - 1
+  const day = parseInt(parts[2])
+  return new Date(year, month, day).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -23,12 +31,6 @@ const RANGES = [
   { id: 90, label: '90D' },
   { id: 365, label: '1Y' },
 ]
-
-const PERIOD_LABELS = {
-  30: 'past 30 days',
-  90: 'past 90 days',
-  365: 'past year',
-}
 
 export default function AccountTrendChart({ accountId, accountName, currentValue }) {
   const [days, setDays] = useState(90)
@@ -77,6 +79,26 @@ export default function AccountTrendChart({ accountId, accountName, currentValue
   const changePct = change != null && firstVal > 0 ? (change / firstVal) * 100 : null
   const positive = change != null ? change >= 0 : true
 
+  // Compute actual days of data
+  const actualDays = trend.length >= 2
+    ? Math.round(
+        (new Date(trend[trend.length - 1].date.split('T')[0]) -
+         new Date(trend[0].date.split('T')[0])) /
+        (1000 * 60 * 60 * 24)
+      )
+    : 0
+
+  const periodLabel = actualDays < 7
+    ? `past ${actualDays} day${actualDays !== 1 ? 's' : ''}`
+    : actualDays < 25
+      ? `past ${actualDays} days`
+      : days === 365
+        ? 'past year'
+        : `past ${days} days`
+
+  const sparseData = actualDays > 0 && actualDays < days / 2
+  const showDots = trend.length < 14
+
   return (
     <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4 flex flex-col">
       {/* Header */}
@@ -120,8 +142,13 @@ export default function AccountTrendChart({ accountId, accountName, currentValue
             {positive ? '+' : ''}{fmt(change)}
             {changePct != null && ` (${positive ? '+' : ''}${changePct.toFixed(2)}%)`}
             <span style={{ color: '#7d8590', marginLeft: 6, fontSize: 10 }}>
-              {PERIOD_LABELS[days] || `past ${days} days`}
+              {periodLabel}
             </span>
+          </p>
+        )}
+        {sparseData && (
+          <p style={{ fontSize: 10, color: '#7d8590', marginTop: 2 }}>
+            Showing {actualDays} days of available data
           </p>
         )}
       </div>
@@ -129,11 +156,25 @@ export default function AccountTrendChart({ accountId, accountName, currentValue
       {/* Chart */}
       {loading ? (
         <Skeleton className="h-[120px]" />
-      ) : trend.length < 2 ? (
+      ) : trend.length === 0 ? (
         <div className="flex items-center justify-center" style={{ height: 120 }}>
           <p className="text-center" style={{ fontSize: 11, color: '#7d8590' }}>
             Building history - check back after a few nightly syncs
           </p>
+        </div>
+      ) : trend.length === 1 ? (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: 120,
+            gap: 4,
+          }}
+        >
+          <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#10b981' }} />
+          <p style={{ fontSize: 11, color: '#7d8590' }}>First data point recorded</p>
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={120}>
@@ -144,12 +185,17 @@ export default function AccountTrendChart({ accountId, accountName, currentValue
                 <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
               </linearGradient>
             </defs>
+            <ReferenceLine
+              y={trend[0]?.total}
+              stroke="#21262d"
+              strokeDasharray="4 4"
+            />
             <Tooltip
               content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null
                 return (
                   <div className="bg-[#161b22] border border-[#21262d] rounded-md px-3 py-2">
-                    <p className="text-xs text-[#7d8590] mb-1">{formatDateFull(label)}</p>
+                    <p className="text-xs text-[#7d8590] mb-1">{formatDate(label)}</p>
                     <p className="font-mono text-sm font-semibold text-[#10b981]">
                       {fmt(payload[0].value)}
                     </p>
@@ -164,8 +210,8 @@ export default function AccountTrendChart({ accountId, accountName, currentValue
               stroke="#10b981"
               strokeWidth={2}
               fill="url(#acctTrendGrad)"
-              dot={false}
-              activeDot={{ r: 3, fill: '#10b981', strokeWidth: 0 }}
+              dot={showDots ? { fill: '#10b981', r: 3, strokeWidth: 0 } : false}
+              activeDot={showDots ? { r: 5, fill: '#34d399' } : { r: 3, fill: '#10b981', strokeWidth: 0 }}
             />
           </AreaChart>
         </ResponsiveContainer>
