@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { ChevronUp, ChevronDown } from 'lucide-react'
 import { fmt, fmtShares } from '@/lib/format'
+import AccountTrendChart from '@/components/dashboard/AccountTrendChart'
 
 const COLORS = [
   '#10b981',
@@ -420,9 +421,9 @@ export default function PortfolioTab({ onOpenDrawer }) {
         </div>
       )}
 
-      {/* Two-panel: Allocation + Account Summary */}
+      {/* Three-panel: Allocation + Trend Chart + Account Summary */}
       {!loading && (allocDonut.length > 0 || accountSummary.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_1.2fr_1fr] gap-4">
 
           {/* Left: Allocation donut */}
           {allocDonut.length > 0 && (
@@ -525,6 +526,21 @@ export default function PortfolioTab({ onOpenDrawer }) {
             </div>
           )}
 
+          {/* Center: Account Trend Chart */}
+          <AccountTrendChart
+            accountId={selectedAccountId}
+            accountName={
+              selectedAccountId
+                ? accounts.find((a) => a.id === selectedAccountId)?.name || ''
+                : 'All Accounts'
+            }
+            currentValue={
+              selectedAccountId
+                ? getAccountValue(accounts.find((a) => a.id === selectedAccountId) || {})
+                : totalAssets
+            }
+          />
+
           {/* Right: Account Summary */}
           {accountSummary.length > 0 && (
             <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4 flex flex-col">
@@ -537,7 +553,14 @@ export default function PortfolioTab({ onOpenDrawer }) {
 
               <div className="flex flex-col gap-2.5 flex-1">
                 {visibleAccSummary.map((acc) => (
-                  <div key={acc.id}>
+                  <div
+                    key={acc.id}
+                    style={{
+                      borderLeft: selectedAccountId === acc.id ? '2px solid #10b981' : '2px solid transparent',
+                      paddingLeft: 8,
+                      transition: 'border-color 0.15s',
+                    }}
+                  >
                     <div className="flex items-center gap-2 mb-1">
                       <span
                         className="font-mono flex-1 truncate text-[#e6edf3]"
