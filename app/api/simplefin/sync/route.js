@@ -362,6 +362,41 @@ export async function POST() {
             holdingsSynced++
           }
         }
+
+        // Calculate cash gap between account balance and holdings market values
+        const holdingsTotal = sfHoldings.reduce((sum, h) => {
+          const mv = parseFloat(h.market_value ?? '0')
+          return sum + (isNaN(mv) ? 0 : mv)
+        }, 0)
+        const cashGap = balanceNum - holdingsTotal
+
+        if (cashGap > 1) {
+          const { error: gapErr } = await supabase.from('holdings').upsert(
+            {
+              account_id: accountId,
+              ticker: 'CASH',
+              shares: 1,
+              avg_cost_basis: cashGap,
+              last_synced_price: cashGap,
+              simplefin_id: `${sfAcc.id}-cash`,
+              is_synced: true,
+              description: 'Uninvested Cash',
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'account_id,simplefin_id' },
+          )
+          if (gapErr) {
+            console.error('Cash gap upsert error:', gapErr.message)
+            failedHoldings++
+          } else {
+            holdingsSynced++
+          }
+        } else {
+          await supabase.from('holdings')
+            .delete()
+            .eq('account_id', accountId)
+            .eq('simplefin_id', `${sfAcc.id}-cash`)
+        }
       } else if (sfAcc.balance != null) {
         // Cash account — store as CASH holding
         // Use 0.01 minimum to satisfy the avg_cost_basis > 0 check constraint
