@@ -12,18 +12,39 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { fmt } from '@/lib/format'
 
 const formatDate = (dateStr) => {
-  if (!dateStr) return ''
-  const clean = dateStr.split('T')[0]
-  const parts = clean.split('-')
-  if (parts.length !== 3) return dateStr
-  const year = parseInt(parts[0])
-  const month = parseInt(parts[1]) - 1
-  const day = parseInt(parts[2])
-  return new Date(year, month, day).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  try {
+    if (!dateStr) return ''
+    const clean = String(dateStr).split('T')[0]
+    const parts = clean.split('-')
+    if (parts.length !== 3) return String(dateStr)
+    const year = parseInt(parts[0])
+    const month = parseInt(parts[1]) - 1
+    const day = parseInt(parts[2])
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return String(dateStr)
+    return new Date(year, month, day).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
+  } catch {
+    return String(dateStr || '')
+  }
+}
+
+const CustomTooltip = ({ active, payload, label }) => {
+  try {
+    if (!active || !payload || !payload.length) return null
+    return (
+      <div className="bg-[#161b22] border border-[#21262d] rounded-md px-3 py-2">
+        <p className="text-xs text-[#7d8590] mb-1">{formatDate(label)}</p>
+        <p className="font-mono text-sm font-semibold text-[#10b981]">
+          {fmt(payload[0]?.value ?? 0)}
+        </p>
+      </div>
+    )
+  } catch {
+    return null
+  }
 }
 
 const RANGES = [
@@ -191,17 +212,7 @@ export default function AccountTrendChart({ accountId, accountName, currentValue
               strokeDasharray="4 4"
             />
             <Tooltip
-              content={({ active, payload, label }) => {
-                if (!active || !payload?.length) return null
-                return (
-                  <div className="bg-[#161b22] border border-[#21262d] rounded-md px-3 py-2">
-                    <p className="text-xs text-[#7d8590] mb-1">{formatDate(label)}</p>
-                    <p className="font-mono text-sm font-semibold text-[#10b981]">
-                      {fmt(payload[0].value)}
-                    </p>
-                  </div>
-                )
-              }}
+              content={<CustomTooltip />}
               cursor={{ stroke: '#7d8590', strokeWidth: 1, strokeDasharray: '3 3' }}
             />
             <Area
