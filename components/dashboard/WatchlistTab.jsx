@@ -103,9 +103,17 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
       await Promise.all(
         preset.tickers.map(async (ticker) => {
           try {
-            const res = await fetch(`/api/stock/quote?ticker=${ticker}`)
-            const data = await res.json()
-            results[ticker] = data
+            const [quoteRes, fundRes] = await Promise.all([
+              fetch(`/api/stock/quote?ticker=${ticker}`),
+              fetch(`/api/stock/fundamentals?ticker=${ticker}`),
+            ])
+            const quoteData = await quoteRes.json()
+            const fundData = await fundRes.json()
+            results[ticker] = {
+              ...quoteData,
+              high52w: fundData.high52w || null,
+              low52w: fundData.low52w || null,
+            }
           } catch {
             results[ticker] = null
           }
@@ -314,7 +322,17 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                           {q ? fmtPct(q.changePercent) : '--'}
                         </td>
                         <td className="px-3 py-2.5 hidden md:table-cell">
-                          <span className="font-mono text-[#7d8590]">--</span>
+                          {q?.low52w && q?.high52w ? (
+                            <RangeBar
+                              low={q.low52w}
+                              high={q.high52w}
+                              current={q.price}
+                              width={80}
+                              showLabels={true}
+                            />
+                          ) : (
+                            <span className="font-mono text-[#7d8590]">--</span>
+                          )}
                         </td>
                         <td className="px-3 py-2.5 text-right">
                           {alreadyAdded ? (

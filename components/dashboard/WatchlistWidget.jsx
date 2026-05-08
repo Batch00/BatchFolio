@@ -36,9 +36,17 @@ export default function WatchlistWidget({ loading, watchlist, fundamentals = {},
       await Promise.all(
         preset.tickers.map(async (ticker) => {
           try {
-            const res = await fetch(`/api/stock/quote?ticker=${ticker}`)
-            const data = await res.json()
-            results[ticker] = data
+            const [quoteRes, fundRes] = await Promise.all([
+              fetch(`/api/stock/quote?ticker=${ticker}`),
+              fetch(`/api/stock/fundamentals?ticker=${ticker}`),
+            ])
+            const quoteData = await quoteRes.json()
+            const fundData = await fundRes.json()
+            results[ticker] = {
+              ...quoteData,
+              high52w: fundData.high52w || null,
+              low52w: fundData.low52w || null,
+            }
           } catch {
             results[ticker] = null
           }
@@ -119,7 +127,9 @@ export default function WatchlistWidget({ loading, watchlist, fundamentals = {},
           <div className="divide-y divide-[#21262d]">
             {displayItems.map((w) => {
               const positive = (w.quote?.changePercent ?? 0) >= 0
-              const f = isPreset ? null : fundamentals[w.ticker]
+              const f = isPreset
+                ? (w.quote?.low52w && w.quote?.high52w ? { low52w: w.quote.low52w, high52w: w.quote.high52w } : null)
+                : fundamentals[w.ticker]
               return (
                 <button
                   key={w.id}
