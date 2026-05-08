@@ -67,7 +67,7 @@ export async function GET(request) {
     // No accountId: use net_worth_snapshots
     const { data: snapshots, error: snapErr } = await supabase
       .from('net_worth_snapshots')
-      .select('date, net_worth')
+      .select('date, total_assets')
       .eq('user_id', user.id)
       .gte('date', from)
       .order('date', { ascending: true })
@@ -76,7 +76,7 @@ export async function GET(request) {
 
     const trend = (snapshots ?? []).map((s) => ({
       date: s.date,
-      total: s.net_worth,
+      total: s.total_assets,
     }))
 
     return NextResponse.json({ trend, accountName: 'All Accounts' })
