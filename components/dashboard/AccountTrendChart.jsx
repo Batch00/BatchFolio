@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import {
   AreaChart,
   Area,
+  XAxis,
+  YAxis,
   ReferenceLine,
   Tooltip,
   ResponsiveContainer,
@@ -206,6 +208,15 @@ export default function AccountTrendChart({ accountId, accountName, currentValue
                 <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
               </linearGradient>
             </defs>
+            <XAxis
+              dataKey="date"
+              tick={false}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              hide
+            />
             <ReferenceLine
               y={trend[0]?.total}
               stroke="#21262d"
