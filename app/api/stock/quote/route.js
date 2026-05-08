@@ -16,6 +16,20 @@ export async function GET(request) {
       finnhubFetch(`/stock/profile2?symbol=${ticker}`),
     ])
 
+    let companyName = profile.name || null
+
+    if (!companyName) {
+      try {
+        const searchData = await finnhubFetch(`/search?q=${ticker}`)
+        const match = (searchData.result || []).find(
+          (r) => r.symbol === ticker,
+        )
+        companyName = match?.description || null
+      } catch {
+        companyName = null
+      }
+    }
+
     return NextResponse.json({
       price: quote.c ?? 0,
       change: quote.d ?? 0,
@@ -24,7 +38,7 @@ export async function GET(request) {
       low: quote.l ?? 0,
       open: quote.o ?? 0,
       previousClose: quote.pc ?? 0,
-      name: profile.name || null,
+      name: companyName,
     })
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 })

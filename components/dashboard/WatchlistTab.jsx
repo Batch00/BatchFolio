@@ -298,9 +298,7 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                           </button>
                         </td>
                         <td className="px-3 py-2.5 text-[#7d8590] max-w-[180px] truncate">
-                          {q?.name ?? (
-                            <span className="inline-block bg-[#21262d] rounded h-3 w-24 align-middle" />
-                          )}
+                          {q?.name || ticker}
                         </td>
                         <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right whitespace-nowrap">
                           {q ? fmt(q.price) : <Skeleton className="h-4 w-14 ml-auto" />}
@@ -380,9 +378,7 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                           </button>
                         </td>
                         <td className="px-3 py-2.5 text-[#7d8590] max-w-[180px] truncate">
-                          {q?.name ?? (
-                            <span className="inline-block bg-[#21262d] rounded h-3 w-24 align-middle" />
-                          )}
+                          {q?.name || w.ticker}
                         </td>
                         <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right whitespace-nowrap">
                           {q ? fmt(q.price) : <Skeleton className="h-4 w-14 ml-auto" />}

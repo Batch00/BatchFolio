@@ -129,7 +129,7 @@ export default function WatchlistWidget({ loading, watchlist, fundamentals = {},
                   {/* Desktop row */}
                   <div className="hidden md:grid grid-cols-[60px_1fr_80px_80px_80px_100px_60px] gap-2 items-center py-2 px-1" style={{ minHeight: 40 }}>
                     <span className="font-mono text-xs text-[#10b981]">{w.ticker}</span>
-                    <span className="text-xs text-[#7d8590] truncate">{w.quote?.name ?? '--'}</span>
+                    <span className="text-xs text-[#7d8590] truncate">{w.quote?.name || w.ticker}</span>
                     <span className="font-mono text-xs text-[#e6edf3] text-right">{fmt(w.quote?.price)}</span>
                     <span className={`font-mono text-xs text-right ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}>
                       {fmtChange(w.quote?.change)}
