@@ -63,12 +63,13 @@ async function syncSimpleFINForUser(
     const sfData = await sfRes.json()
 
     // Parse connection errors from SimpleFIN response
-    const sfErrors: { code?: string; message?: string; conn_id?: string }[] = sfData.errors ?? []
+    const sfErrors: { code?: string; msg?: string; message?: string; conn_id?: string }[] =
+      sfData.errlist ?? sfData.errors ?? []
     const connectionErrors = sfErrors
-      .filter((e) => e.code && e.message)
+      .filter((e) => e.code && (e.msg || e.message))
       .map((e) => ({
         code: e.code,
-        message: e.message,
+        message: e.msg || e.message,
         conn_id: e.conn_id || null,
         detected_at: new Date().toISOString(),
       }))
