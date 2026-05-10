@@ -154,7 +154,7 @@ export default function SettingsTab({ isDemo, onDemoBlock }) {
             {connection.last_synced_at && (
               <p className="text-xs text-[#7d8590]">
                 Last synced: {relativeTime(connection.last_synced_at)}
-                {connection.connection_errors?.length > 0 ? (
+                {(connection.connection_errors ?? []).filter(e => e.code?.startsWith('con.')).length > 0 ? (
                   <span className="text-[#fbbf24]" style={{ fontSize: 10 }}> - some accounts need attention</span>
                 ) : (
                   <span className="text-[#34d399]" style={{ fontSize: 10 }}> - all accounts syncing normally</span>
@@ -162,7 +162,7 @@ export default function SettingsTab({ isDemo, onDemoBlock }) {
               </p>
             )}
 
-            {connection.connection_errors?.length > 0 && (
+            {(connection.connection_errors ?? []).filter(e => e.code?.startsWith('con.')).length > 0 && (
               <div
                 style={{
                   background: 'rgba(251,191,36,0.08)',
@@ -176,7 +176,7 @@ export default function SettingsTab({ isDemo, onDemoBlock }) {
                   <TriangleAlert style={{ width: 14, height: 14, color: '#fbbf24', flexShrink: 0 }} />
                   <span style={{ fontSize: 12, color: '#fbbf24', fontWeight: 500 }}>Action required</span>
                 </div>
-                {connection.connection_errors.map((err, i) => (
+                {connection.connection_errors.filter(e => e.code?.startsWith('con.')).map((err, i) => (
                   <p key={i} style={{ fontSize: 11, color: '#fbbf24', marginBottom: 2 }}>
                     {err.message}
                   </p>

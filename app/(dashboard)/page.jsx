@@ -82,8 +82,11 @@ export default function App() {
       .select('connection_errors')
       .maybeSingle()
       .then(({ data }) => {
-        if (data?.connection_errors?.length > 0) {
-          setConnErrors(data.connection_errors)
+        const actionableErrors = (data?.connection_errors ?? []).filter(
+          e => e.code?.startsWith('con.')
+        )
+        if (actionableErrors.length > 0) {
+          setConnErrors(actionableErrors)
         }
       })
   }, [user])
