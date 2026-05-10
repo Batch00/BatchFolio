@@ -84,16 +84,17 @@ export async function POST() {
       return Response.json({ error: 'No SimpleFIN connection' }, { status: 400 })
     }
 
-    if (conn.last_synced_at) {
-      const lastSync = new Date(conn.last_synced_at)
-      const oneHourAgo = new Date(Date.now() - SYNC_RATE_LIMIT_MS)
-      if (lastSync > oneHourAgo) {
-        return Response.json({
-          alreadySynced: true,
-          message: 'Already synced recently. SimpleFIN updates once per day.'
-        })
-      }
-    }
+    // TEMPORARILY DISABLED for debugging
+    // if (conn.last_synced_at) {
+    //   const lastSync = new Date(conn.last_synced_at)
+    //   const oneHourAgo = new Date(Date.now() - SYNC_RATE_LIMIT_MS)
+    //   if (lastSync > oneHourAgo) {
+    //     return Response.json({
+    //       alreadySynced: true,
+    //       message: 'Already synced recently. SimpleFIN updates once per day.'
+    //     })
+    //   }
+    // }
 
     // Parse access URL for credentials
     const url = new URL(conn.access_url)
@@ -111,6 +112,15 @@ export async function POST() {
       throw new Error(`SimpleFIN returned ${sfRes.status}`)
     }
     const sfData = await sfRes.json()
+
+    // TEMPORARY DEBUG LOGGING
+    console.log('SimpleFIN response keys:', Object.keys(sfData))
+    console.log('SimpleFIN errors:', JSON.stringify(sfData.errors ?? sfData.errlist ?? null))
+    console.log('SimpleFIN error count:', (sfData.errors?.length ?? 0) + (sfData.errlist?.length ?? 0))
+    if (sfData.errors?.length || sfData.errlist?.length) {
+      console.log('Full error response:', JSON.stringify(sfData).substring(0, 500))
+    }
+
     const sfAccounts = sfData.accounts ?? []
 
 
