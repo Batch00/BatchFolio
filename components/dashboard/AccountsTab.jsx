@@ -71,6 +71,93 @@ function typeBadge(type) {
   return { background: 'rgba(16,185,129,0.1)', color: '#10b981' }
 }
 
+function formatShortDate(dateStr) {
+  const parts = dateStr.split('-')
+  return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]))
+    .toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function AccountReturnBanner({ accountId }) {
+  const [periodReturn, setPeriodReturn] = useState(null)
+  const [returnPeriod, setReturnPeriod] = useState('ytd')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/holdings/account-return?accountId=${accountId}&period=${returnPeriod}`)
+      .then((r) => r.json())
+      .then((data) => { setPeriodReturn(data); setLoading(false) })
+      .catch(() => { setPeriodReturn(null); setLoading(false) })
+  }, [accountId, returnPeriod])
+
+  if (loading) {
+    return <Skeleton className="h-14 mx-4 mb-3" />
+  }
+
+  const hasEnoughData = periodReturn?.hasData && periodReturn.dataPoints >= 2
+
+  return (
+    <div style={{
+      background: 'rgba(16,185,129,0.06)',
+      border: '1px solid rgba(16,185,129,0.15)',
+      borderRadius: 6,
+      padding: '8px 12px',
+      margin: '0 16px 12px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <span style={{ fontSize: 10, color: '#7d8590' }}>ACCOUNT RETURN</span>
+          {hasEnoughData ? (
+            <>
+              <div style={{
+                fontSize: 14,
+                fontFamily: 'monospace',
+                color: periodReturn.changeDollar >= 0 ? '#34d399' : '#f87171',
+                fontWeight: 500,
+              }}>
+                {periodReturn.changeDollar >= 0 ? '+' : ''}{fmt(periodReturn.changeDollar)}{' '}
+                ({periodReturn.changePct >= 0 ? '+' : ''}{periodReturn.changePct.toFixed(2)}%)
+              </div>
+              <div style={{ fontSize: 10, color: '#7d8590' }}>
+                {formatShortDate(periodReturn.startDate)} → {formatShortDate(periodReturn.endDate)}
+                {returnPeriod === 'ytd' ? ' (YTD)' : returnPeriod === '1y' ? ' (1Y)' : ' (All time)'}
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 11, color: '#7d8590', marginTop: 2 }}>
+              Not enough history yet. Returns will appear after a few nightly syncs.
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {['ytd', '1y', 'alltime'].map((p) => (
+            <button
+              key={p}
+              onClick={() => setReturnPeriod(p)}
+              style={{
+                padding: '2px 8px',
+                fontSize: 10,
+                borderRadius: 4,
+                border: '1px solid',
+                borderColor: returnPeriod === p ? '#10b981' : '#21262d',
+                background: returnPeriod === p ? 'rgba(16,185,129,0.1)' : 'transparent',
+                color: returnPeriod === p ? '#10b981' : '#7d8590',
+                cursor: 'pointer',
+                fontFamily: 'monospace',
+              }}
+            >
+              {p === 'ytd' ? 'YTD' : p === '1y' ? '1Y' : 'ALL'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p style={{ fontSize: 10, color: '#7d8590', marginTop: 4 }}>
+        Cost basis unavailable from provider. Showing account balance change over time.
+      </p>
+    </div>
+  )
+}
+
 function SortableAccountRow({
   acc, holdings, prices, expanded, toggleExpand, accountTotal, fmtBalanceDate,
   openEditAccount, deleteAccount, toggleExclude, openAddHolding, openEditHolding,
@@ -257,6 +344,9 @@ function SortableAccountRow({
                 Add Holding
               </button>
             </div>
+          )}
+          {!hasGainData && holdList.length > 0 && (
+            <AccountReturnBanner accountId={acc.id} />
           )}
           {holdList.length === 0 ? (
             <p className="text-xs text-[#7d8590] px-4 pb-3">No holdings in this account.</p>
