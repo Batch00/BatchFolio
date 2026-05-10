@@ -465,6 +465,29 @@ export async function POST() {
       }
     }
 
+    // Write today's account balance snapshots
+    // account_snapshots backfills automatically on each sync and nightly run
+    const todayDate = new Date().toISOString().split('T')[0]
+    const { data: snapshotAccounts } = await supabase
+      .from('accounts')
+      .select('id, balance')
+      .eq('user_id', user.id)
+      .eq('is_synced', true)
+      .eq('is_excluded', false)
+      .eq('is_hidden', false)
+
+    for (const acc of (snapshotAccounts ?? [])) {
+      if ((acc.balance ?? 0) <= 0) continue
+      await supabase
+        .from('account_snapshots')
+        .upsert({
+          user_id: user.id,
+          account_id: acc.id,
+          balance: acc.balance,
+          date: todayDate,
+        }, { onConflict: 'account_id,date' })
+    }
+
     // Update last_synced_at and connection errors
     await supabase
       .from('simplefin_connections')

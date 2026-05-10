@@ -141,6 +141,10 @@ simplefin_connections:
 net_worth_snapshots:
   id, user_id, date, total_assets, total_liabilities, net_worth
 
+account_snapshots:
+  id, user_id, account_id, balance, date. Unique on (account_id, date).
+  Tracks daily account balance for all account types including bank and HSA accounts.
+
 watchlist:
   id, user_id, ticker, added_at. Unique on (user_id, ticker).
 ```

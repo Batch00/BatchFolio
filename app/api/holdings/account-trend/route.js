@@ -29,7 +29,23 @@ export async function GET(request) {
         return NextResponse.json({ error: 'Account not found' }, { status: 404 })
       }
 
-      // Get holding IDs for this account
+      // First check account_snapshots for this account (covers all account types)
+      const { data: acctSnaps } = await supabase
+        .from('account_snapshots')
+        .select('date, balance')
+        .eq('account_id', accountId)
+        .gte('date', from)
+        .order('date', { ascending: true })
+
+      if (acctSnaps && acctSnaps.length >= 2) {
+        const trend = acctSnaps.map((s) => ({
+          date: s.date,
+          total: s.balance,
+        }))
+        return NextResponse.json({ trend, accountName: account.name })
+      }
+
+      // Fall back to holding_snapshots for investment accounts
       const { data: holdings } = await supabase
         .from('holdings')
         .select('id')
@@ -41,7 +57,6 @@ export async function GET(request) {
         return NextResponse.json({ trend: [], accountName: account.name })
       }
 
-      // Fetch holding_snapshots for those holdings
       const { data: snapshots, error: snapErr } = await supabase
         .from('holding_snapshots')
         .select('date, market_value, holding_id')

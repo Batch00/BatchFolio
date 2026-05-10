@@ -417,13 +417,13 @@ Deno.serve(async () => {
 
       // Fetch accounts for this user (include balance for synced accounts, exclude excluded accounts)
       const { data: accounts } = await supabase.schema('batchfolio').from('accounts')
-        .select('id, is_synced, balance, is_excluded')
+        .select('id, is_synced, balance, is_excluded, is_hidden')
         .eq('user_id', uid)
 
-      const accountList = (accounts ?? []) as { id: string; is_synced: boolean; balance: number; is_excluded: boolean }[]
+      const accountList = (accounts ?? []) as { id: string; is_synced: boolean; balance: number; is_excluded: boolean; is_hidden: boolean }[]
 
-      // Filter out excluded accounts from all calculations
-      const activeAccounts = accountList.filter((a: { is_excluded: boolean }) => !a.is_excluded)
+      // Filter out excluded and hidden accounts from all calculations
+      const activeAccounts = accountList.filter((a: { is_excluded: boolean; is_hidden: boolean }) => !a.is_excluded && !a.is_hidden)
 
       // Calculate synced assets total directly from account balances
       const syncedAssetsTotal = activeAccounts
@@ -432,11 +432,11 @@ Deno.serve(async () => {
 
       // Fetch holdings for non-synced accounts (manual)
       const manualAccountIds = activeAccounts.filter((a: { is_synced: boolean }) => !a.is_synced).map((a: { id: string }) => a.id)
-      let manualHoldings: { ticker: string; shares: number; avg_cost_basis: number }[] = []
+      let manualHoldings: { ticker: string; shares: number; avg_cost_basis: number; account_id: string }[] = []
 
       if (manualAccountIds.length > 0) {
         const { data: holdingRows } = await supabase.schema('batchfolio').from('holdings')
-          .select('ticker, shares, avg_cost_basis')
+          .select('ticker, shares, avg_cost_basis, account_id')
           .in('account_id', manualAccountIds)
         manualHoldings = holdingRows ?? []
       }
@@ -492,6 +492,35 @@ Deno.serve(async () => {
       )
 
       if (upsertErr) throw new Error(upsertErr.message)
+
+      // Write account balance snapshots
+      for (const account of activeAccounts) {
+        let balance = 0
+
+        if (account.is_synced && (account.balance as number) > 0) {
+          balance = account.balance as number
+        } else if (!account.is_synced) {
+          const acctHoldings = manualHoldings.filter(
+            (h: { account_id?: string }) => (h as any).account_id === account.id
+          )
+          balance = acctHoldings.reduce((sum: number, h: { ticker: string; shares: number; avg_cost_basis: number }) => {
+            if (h.ticker === 'CASH') return sum + (h.avg_cost_basis ?? 0)
+            return sum + h.shares * (priceMap[h.ticker] ?? 0)
+          }, 0)
+        }
+
+        if (balance <= 0) continue
+
+        await (supabase as any)
+          .schema('batchfolio')
+          .from('account_snapshots')
+          .upsert({
+            user_id: uid,
+            account_id: account.id,
+            balance,
+            date: today,
+          }, { onConflict: 'account_id,date' })
+      }
 
       // Write per-holding snapshots for time-based return calculations
       const { data: allHoldings } = await (supabase as any)
