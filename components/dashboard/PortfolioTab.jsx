@@ -7,6 +7,7 @@ import { PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { ChevronUp, ChevronDown } from 'lucide-react'
 import { fmt, fmtShares } from '@/lib/format'
 import AccountTrendChart from '@/components/dashboard/AccountTrendChart'
+import ReturnCell from '@/components/dashboard/ReturnCell'
 
 const COLORS = [
   '#10b981',
@@ -27,8 +28,7 @@ const COLS = [
   { key: 'livePrice', label: 'Price', numeric: true },
   { key: 'ret7d', label: '7D', numeric: true, noSort: true, hideMobile: true },
   { key: 'value', label: 'Value', numeric: true },
-  { key: 'gainLoss', label: 'Gain/Loss $', numeric: true, hideMobile: true },
-  { key: 'gainPct', label: 'Gain/Loss %', numeric: true },
+  { key: 'gainLoss', label: 'Return', numeric: true, noSort: true, tooltip: 'Cost basis gain/loss for holdings where available. Price change since first snapshot for holdings without cost basis.' },
 ]
 
 function SortIcon({ dir }) {
@@ -87,6 +87,8 @@ export default function PortfolioTab({ onOpenDrawer }) {
   const [totalLiabilities, setTotalLiabilities] = useState(0)
   const [showAllAccSummary, setShowAllAccSummary] = useState(false)
   const [accountValues, setAccountValues] = useState({})
+  const [periodReturns, setPeriodReturns] = useState({})
+  const [periodReturnLoading, setPeriodReturnLoading] = useState(false)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -232,6 +234,22 @@ export default function PortfolioTab({ onOpenDrawer }) {
     }
 
     setRows(Object.values(mergedMap))
+
+    // Fetch period returns for holdings without cost basis
+    const tickersNeedingPeriodReturn = [...new Set(
+      Object.values(mergedMap)
+        .filter((h) => h.ticker !== 'CASH' && (!h.avgCost || h.avgCost <= 0))
+        .map((h) => h.ticker)
+    )]
+    if (tickersNeedingPeriodReturn.length > 0) {
+      setPeriodReturnLoading(true)
+      fetch(`/api/holdings/period-return?tickers=${tickersNeedingPeriodReturn.join(',')}`)
+        .then((r) => r.json())
+        .then((data) => setPeriodReturns(data.results || {}))
+        .catch(() => {})
+        .finally(() => setPeriodReturnLoading(false))
+    }
+
     setLoading(false)
 
     if (tickers.length > 0) {
@@ -674,6 +692,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                   <th
                     key={col.key}
                     onClick={col.noSort ? undefined : () => handleSort(col.key)}
+                    title={col.tooltip || undefined}
                     className={`px-3 py-2.5 text-[10px] uppercase tracking-wider text-[#7d8590] whitespace-nowrap font-mono ${
                       col.noSort ? '' : 'cursor-pointer hover:text-[#e6edf3] select-none'
                     } ${col.numeric ? 'text-right' : 'text-left'} ${col.hideMobile ? 'hidden md:table-cell' : ''}`}
@@ -707,7 +726,6 @@ export default function PortfolioTab({ onOpenDrawer }) {
               ) : (
                 <>
                   {sorted.map((h) => {
-                    const positive = h.gainLoss != null ? h.gainLoss >= 0 : true
                     const primaryLabel = h.description
                       ? h.description.length > 25
                         ? h.description.slice(0, 25) + '...'
@@ -791,19 +809,15 @@ export default function PortfolioTab({ onOpenDrawer }) {
                         <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right">
                           {h.hasPrice ? fmt(h.value) : '--'}
                         </td>
-                        <td
-                          className={`px-3 py-2.5 font-mono text-right hidden md:table-cell ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}
-                        >
-                          {h.gainLoss == null
-                            ? '--'
-                            : `${positive ? '+' : ''}${fmt(h.gainLoss)}`}
-                        </td>
-                        <td
-                          className={`px-3 py-2.5 font-mono text-right ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}
-                        >
-                          {h.gainPct == null
-                            ? <span className="text-[#7d8590]">--</span>
-                            : `${positive ? '+' : ''}${h.gainPct.toFixed(2)}%`}
+                        <td className="px-3 py-2.5 text-right">
+                          <ReturnCell
+                            ticker={h.ticker}
+                            avgCostBasis={h.avgCost}
+                            currentPrice={h.livePrice}
+                            shares={h.shares}
+                            periodReturn={periodReturns[h.ticker]}
+                            loading={periodReturnLoading}
+                          />
                         </td>
                       </tr>
                     )
@@ -826,12 +840,11 @@ export default function PortfolioTab({ onOpenDrawer }) {
                             {fmt(totalValue)}
                           </td>
                           <td
-                            className={`px-3 py-2.5 font-mono text-sm font-semibold text-right hidden md:table-cell ${totalPositive ? 'text-[#34d399]' : 'text-[#f87171]'}`}
+                            className={`px-3 py-2.5 font-mono text-sm font-semibold text-right ${totalPositive ? 'text-[#34d399]' : 'text-[#f87171]'}`}
                           >
                             {totalPositive ? '+' : ''}
                             {fmt(totalGainLoss)}
                           </td>
-                          <td className="px-3 py-2.5" />
                         </tr>
                       )
                     })()}

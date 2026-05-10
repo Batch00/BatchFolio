@@ -32,6 +32,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { fmt, fmtShares } from '@/lib/format'
+import ReturnCell from '@/components/dashboard/ReturnCell'
 
 function fmtDate(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
@@ -175,6 +176,23 @@ function SortableAccountRow({
   const isExpanded = expanded[acc.id]
   const isExcluded = acc.is_excluded ?? false
   const hasGainData = holdList.some((h) => h.ticker !== 'CASH' && h.avg_cost_basis > 0)
+
+  const [holdingPeriodReturns, setHoldingPeriodReturns] = useState({})
+  const [periodReturnLoading, setPeriodReturnLoading] = useState(false)
+
+  useEffect(() => {
+    if (!isExpanded) return
+    const noBasisTickers = holdList
+      .filter((h) => h.ticker !== 'CASH' && (!h.avg_cost_basis || h.avg_cost_basis <= 0))
+      .map((h) => h.ticker)
+    if (noBasisTickers.length === 0) return
+    setPeriodReturnLoading(true)
+    fetch(`/api/holdings/period-return?tickers=${noBasisTickers.join(',')}`)
+      .then((r) => r.json())
+      .then((d) => setHoldingPeriodReturns(d.results || {}))
+      .catch(() => {})
+      .finally(() => setPeriodReturnLoading(false))
+  }, [isExpanded])
 
   function get7DReturn(ticker) {
     if (ticker === 'CASH') return null
@@ -360,7 +378,7 @@ function SortableAccountRow({
                   <col className="hidden md:table-column" style={{ width: 90 }} />
                   <col style={{ width: 90 }} />
                   <col style={{ width: 100 }} />
-                  {hasGainData && <col style={{ width: 80 }} />}
+                  <col style={{ width: 130 }} />
                   <col className="hidden md:table-column" style={{ width: 70 }} />
                   <col style={{ width: 56 }} />
                 </colgroup>
@@ -372,7 +390,7 @@ function SortableAccountRow({
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">Avg Cost</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Price</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Value</th>
-                    {hasGainData && <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Gain%</th>}
+                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} title="Cost basis gain/loss for holdings where available. Price change since first snapshot for holdings without cost basis.">Return</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">7D</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} />
                   </tr>
@@ -382,10 +400,6 @@ function SortableAccountRow({
                     const isCash = h.ticker === 'CASH'
                     const livePrice = isCash ? h.avg_cost_basis : (prices[h.ticker]?.price ?? 0)
                     const value = isCash ? h.avg_cost_basis : h.shares * livePrice
-                    const costBasis = isCash ? h.avg_cost_basis : h.shares * h.avg_cost_basis
-                    const gainLoss = isCash ? 0 : value - costBasis
-                    const gainPct = isCash ? 0 : costBasis > 0 ? (gainLoss / costBasis) * 100 : 0
-                    const positive = gainLoss >= 0
                     const desc = h.description || h.ticker
                     return (
                       <tr key={h.id} style={{ height: 36, borderBottom: '1px solid #21262d' }}>
@@ -426,17 +440,16 @@ function SortableAccountRow({
                         <td style={{ padding: '6px 8px', textAlign: 'right' }}>
                           <span className="font-mono text-xs text-[#e6edf3]">{fmt(value)}</span>
                         </td>
-                        {hasGainData && (
-                          <td style={{ padding: '6px 8px', textAlign: 'right' }}>
-                            {isCash || costBasis <= 0 ? (
-                              <span className="font-mono text-xs text-[#7d8590]">--</span>
-                            ) : (
-                              <span className={`font-mono text-xs ${positive ? 'text-[#34d399]' : 'text-[#f87171]'}`}>
-                                {positive ? '+' : ''}{gainPct.toFixed(2)}%
-                              </span>
-                            )}
-                          </td>
-                        )}
+                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                          <ReturnCell
+                            ticker={h.ticker}
+                            avgCostBasis={h.avg_cost_basis}
+                            currentPrice={livePrice}
+                            shares={h.shares}
+                            periodReturn={holdingPeriodReturns[h.ticker]}
+                            loading={periodReturnLoading}
+                          />
+                        </td>
                         <td style={{ padding: '6px 8px', textAlign: 'right' }} className="hidden md:table-cell">
                           {(() => {
                             const ret = get7DReturn(h.ticker)
