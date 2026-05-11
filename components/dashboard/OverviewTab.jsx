@@ -113,12 +113,15 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     setLoading(false)
 
     // Update top bar net worth using live liabilities total
-    const liveLiabTotal = (liabRes.data ?? []).reduce((sum, l) => sum + l.balance, 0)
+    const liveLiabTotal = (liabRes.data ?? []).reduce(
+      (sum, l) => sum + (Number.isFinite(Number(l.balance)) ? Number(l.balance) : 0),
+      0,
+    )
 
     // Use account balance for synced accounts, holdings * price for manual (excluded accounts already filtered)
     const syncedAssetsLive = allAccounts
       .filter((a) => a.is_synced && a.balance > 0)
-      .reduce((sum, a) => sum + a.balance, 0)
+      .reduce((sum, a) => sum + (Number.isFinite(Number(a.balance)) ? Number(a.balance) : 0), 0)
     const manualAssetsLive = allHoldings
       .filter((h) => !syncedAccountIds.has(h.account_id))
       .reduce((sum, h) => {
@@ -186,7 +189,10 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   }, [loadData])
 
   const latest = snapshots[snapshots.length - 1]
-  const liveLiabilitiesTotal = liveLiabilities.reduce((sum, l) => sum + l.balance, 0)
+  const liveLiabilitiesTotal = liveLiabilities.reduce(
+    (sum, l) => sum + (Number.isFinite(Number(l.balance)) ? Number(l.balance) : 0),
+    0,
+  )
 
   // Use account balance for synced accounts, holdings * price for manual (filter excluded)
   const activeAccounts = liveAccounts.filter((a) => !a.is_excluded)
@@ -195,7 +201,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
   )
   const syncedAssetsDisplay = activeAccounts
     .filter((a) => a.is_synced && a.balance > 0)
-    .reduce((sum, a) => sum + a.balance, 0)
+    .reduce((sum, a) => sum + (Number.isFinite(Number(a.balance)) ? Number(a.balance) : 0), 0)
   const manualAssetsDisplay = holdings
     .filter((h) => !syncedAccountIdSet.has(h.account_id))
     .reduce((sum, h) => {

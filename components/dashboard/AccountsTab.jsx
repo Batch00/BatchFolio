@@ -34,6 +34,8 @@ import { CSS } from '@dnd-kit/utilities'
 import { fmt, fmtShares } from '@/lib/format'
 import ReturnCell from '@/components/dashboard/ReturnCell'
 
+const TICKER_REGEX = /^[A-Z0-9.\-]{1,10}$/
+
 function fmtDate(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
     year: 'numeric',
@@ -192,7 +194,7 @@ function SortableAccountRow({
       .then((d) => setHoldingPeriodReturns(d.results || {}))
       .catch(() => {})
       .finally(() => setPeriodReturnLoading(false))
-  }, [isExpanded])
+  }, [isExpanded, holdList])
 
   function get7DReturn(ticker) {
     if (ticker === 'CASH') return null
@@ -682,8 +684,12 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
   function accountTotal(acc) {
     if (acc.is_synced && acc.balance > 0) return acc.balance
     return (holdings[acc.id] ?? []).reduce((sum, h) => {
-      if (h.ticker === 'CASH') return sum + h.avg_cost_basis
-      return sum + h.shares * (prices[h.ticker]?.price ?? 0)
+      if (h.ticker === 'CASH') {
+        return sum + (Number.isFinite(Number(h.avg_cost_basis)) ? Number(h.avg_cost_basis) : 0)
+      }
+      const shares = Number.isFinite(Number(h.shares)) ? Number(h.shares) : 0
+      const price = Number(prices[h.ticker]?.price)
+      return sum + shares * (Number.isFinite(price) ? price : 0)
     }, 0)
   }
 
@@ -773,13 +779,28 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
   async function addHolding(e) {
     e.preventDefault()
     if (isDemo) { onDemoBlock?.(); return }
-    setHoldSaving(true)
     setHoldError(null)
+    const tickerNorm = holdTicker.toUpperCase().trim()
+    if (!TICKER_REGEX.test(tickerNorm)) {
+      setHoldError('Invalid ticker symbol')
+      return
+    }
+    const sharesNum = parseFloat(holdShares)
+    if (!Number.isFinite(sharesNum) || sharesNum <= 0) {
+      setHoldError('Shares must be a positive number')
+      return
+    }
+    const costNum = parseFloat(holdCost)
+    if (!Number.isFinite(costNum) || costNum < 0) {
+      setHoldError('Cost basis must be a valid number')
+      return
+    }
+    setHoldSaving(true)
     const { error: err } = await supabase.from('holdings').insert({
       account_id: holdAccountId,
-      ticker: holdTicker.toUpperCase().trim(),
-      shares: parseFloat(holdShares),
-      avg_cost_basis: parseFloat(holdCost),
+      ticker: tickerNorm,
+      shares: sharesNum,
+      avg_cost_basis: costNum,
     })
     if (err) {
       setHoldError(err.message)
@@ -810,13 +831,23 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
   async function saveEditHolding(e) {
     e.preventDefault()
     if (isDemo) { onDemoBlock?.(); return }
-    setEditHoldSaving(true)
     setEditHoldError(null)
+    const sharesNum = parseFloat(editHoldShares)
+    if (!Number.isFinite(sharesNum) || sharesNum <= 0) {
+      setEditHoldError('Shares must be a positive number')
+      return
+    }
+    const costNum = parseFloat(editHoldCost)
+    if (!Number.isFinite(costNum) || costNum < 0) {
+      setEditHoldError('Cost basis must be a valid number')
+      return
+    }
+    setEditHoldSaving(true)
     const { error: err } = await supabase
       .from('holdings')
       .update({
-        shares: parseFloat(editHoldShares),
-        avg_cost_basis: parseFloat(editHoldCost),
+        shares: sharesNum,
+        avg_cost_basis: costNum,
         updated_at: new Date().toISOString(),
       })
       .eq('id', editHoldId)
@@ -923,9 +954,11 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     const newIndex = accounts.findIndex((a) => a.id === over.id)
     const reordered = arrayMove(accounts, oldIndex, newIndex)
     setAccounts(reordered)
-    for (let i = 0; i < reordered.length; i++) {
-      await supabase.from('accounts').update({ sort_order: i }).eq('id', reordered[i].id)
-    }
+    await Promise.all(
+      reordered.map((acc, i) =>
+        supabase.from('accounts').update({ sort_order: i }).eq('id', acc.id),
+      ),
+    )
   }
 
   const sensors = useSensors(
@@ -933,7 +966,10 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
-  const liabTotal = liabilities.reduce((s, l) => s + l.balance, 0)
+  const liabTotal = liabilities.reduce(
+    (s, l) => s + (Number.isFinite(Number(l.balance)) ? Number(l.balance) : 0),
+    0,
+  )
 
   // Detect duplicate providers
   const providerCounts = {}

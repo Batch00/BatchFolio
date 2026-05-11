@@ -47,6 +47,7 @@ export async function GET(request) {
       .from('account_snapshots')
       .select('date, balance')
       .eq('account_id', accountId)
+      .eq('user_id', user.id)
       .order('date', { ascending: true })
 
     if (startDate) {

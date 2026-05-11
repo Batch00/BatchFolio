@@ -72,7 +72,6 @@ export default function AdminPage() {
         body: JSON.stringify({ email }),
       })
       const json = await res.json()
-      console.log('[send-invite] response:', res.status, json)
 
       if (!res.ok || json.error) {
         setError(json.error ?? 'Failed to send invite')

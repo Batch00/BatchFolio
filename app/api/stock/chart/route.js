@@ -21,13 +21,7 @@ async function fetchCandlesForConfig(ticker, config) {
   })
 
   if (!res.ok) {
-    const text = await res.text()
-    console.error('Polygon response:', {
-      ticker,
-      config,
-      status: res.status,
-      data: text.substring(0, 200),
-    })
+    console.error('Polygon error:', res.status, ticker)
     return null
   }
 
@@ -36,12 +30,12 @@ async function fetchCandlesForConfig(ticker, config) {
   try {
     data = JSON.parse(text)
   } catch {
-    console.error('Failed to parse Polygon response:', text.substring(0, 200))
+    console.error('Polygon parse error:', ticker)
     return null
   }
 
   if (!data || data.status === 'ERROR' || !Array.isArray(data.results) || data.results.length === 0) {
-    console.log('No Polygon data:', { ticker, days: config.days, status: data?.status, message: data?.message })
+    console.error('Polygon no data:', ticker, data?.status)
     return null
   }
 
@@ -84,8 +78,8 @@ export async function GET(request) {
 
     return NextResponse.json({ candles: [] })
 
-  } catch (err) {
-    console.error('Chart route error:', { ticker, range, error: err.message })
+  } catch {
+    console.error('Chart route error:', ticker, range)
     return NextResponse.json({ candles: [] })
   }
 }

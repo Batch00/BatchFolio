@@ -34,6 +34,7 @@ export async function GET(request) {
         .from('account_snapshots')
         .select('date, balance')
         .eq('account_id', accountId)
+        .eq('user_id', user.id)
         .gte('date', from)
         .order('date', { ascending: true })
 
@@ -61,6 +62,7 @@ export async function GET(request) {
         .from('holding_snapshots')
         .select('date, market_value, holding_id')
         .in('holding_id', holdingIds)
+        .eq('user_id', user.id)
         .gte('date', from)
         .order('date', { ascending: true })
 

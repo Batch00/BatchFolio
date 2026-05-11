@@ -5,10 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Search } from 'lucide-react'
 import Sparkline from '@/components/dashboard/Sparkline'
-import { fmtShares } from '@/lib/format'
-
-const fmt = (v) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v ?? 0)
+import { fmt, fmtShares } from '@/lib/format'
 
 const RANGE_DAYS = { '7d': 7, '30d': 30, '90d': 90, '1y': 365 }
 const RANGE_BADGE = { '7d': '7D', '30d': '30D', '90d': '90D', '1y': '1Y' }

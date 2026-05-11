@@ -170,7 +170,6 @@ Holdings RLS joins to accounts to verify `accounts.user_id = auth.uid()`. From t
 - `POST /api/admin/send-invite`
 - `GET /api/admin/list-invites`
 - `POST /api/admin/revoke-invite`
-- `GET /api/auth/check-invite` (may be removed)
 
 **Other:**
 - `GET /api/version` - returns build hash for auto-refresh on redeploy
@@ -193,7 +192,7 @@ SimpleFIN syncs real bank/brokerage balances and transactions via a user-provide
 ## Edge Functions
 
 **`nightly-snapshot`** (Supabase Edge Function):
-- Triggered at 6AM UTC via `pg_cron`
+- Triggered nightly at 23:00 UTC via `pg_cron` (cron: `0 23 * * *`)
 - Syncs SimpleFIN first, then calculates and inserts a net worth snapshot for each user
 - Skips the demo user (checked against `DEMO_EMAIL`)
 - All `.from()` calls must use `.schema('batchfolio')` because the client is initialized without a default schema

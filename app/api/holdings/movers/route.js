@@ -83,10 +83,19 @@ export async function GET(request) {
       }
     }
 
-    // Fetch descriptions from holdings (join through accounts for user scoping via RLS)
-    const { data: holdingDetails } = await supabase
-      .from('holdings')
-      .select('ticker, description')
+    // Fetch descriptions from holdings, scoped to this user's accounts
+    const { data: userAccounts } = await supabase
+      .from('accounts')
+      .select('id')
+      .eq('user_id', user.id)
+    const userAccountIds = (userAccounts ?? []).map((a) => a.id)
+
+    const { data: holdingDetails } = userAccountIds.length > 0
+      ? await supabase
+          .from('holdings')
+          .select('ticker, description')
+          .in('account_id', userAccountIds)
+      : { data: [] }
 
     const descriptionMap = {}
     for (const h of (holdingDetails ?? [])) {

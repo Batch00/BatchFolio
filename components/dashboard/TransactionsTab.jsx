@@ -23,7 +23,8 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 const PAGE_SIZE = 50
 
-const fmt = (v) =>
+// Local formatter: transactions use Math.abs because sign is rendered separately via +/-.
+const fmtAbs = (v) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Math.abs(v ?? 0))
 
 function fmtDate(iso) {
@@ -123,6 +124,7 @@ export default function TransactionsTab() {
           .eq('user_id', user.id)
           .gte('posted_at', fromDate.toISOString())
           .order('posted_at', { ascending: false })
+          .limit(2000)
         if (liabilityId) {
           q = q.eq('liability_id', liabilityId)
         } else if (selectedAccount !== 'all') {
@@ -268,7 +270,7 @@ export default function TransactionsTab() {
             >
               Total In
             </p>
-            <p className="font-mono text-sm font-semibold text-[#34d399]">+{fmt(totalIn)}</p>
+            <p className="font-mono text-sm font-semibold text-[#34d399]">+{fmtAbs(totalIn)}</p>
           </div>
           <div className="bg-[#161b22] border border-[#21262d] rounded px-3 py-2 flex flex-col gap-0.5 min-w-[110px]">
             <p
@@ -277,7 +279,7 @@ export default function TransactionsTab() {
             >
               Total Out
             </p>
-            <p className="font-mono text-sm font-semibold text-[#f87171]">-{fmt(totalOut)}</p>
+            <p className="font-mono text-sm font-semibold text-[#f87171]">-{fmtAbs(totalOut)}</p>
           </div>
           <div className="bg-[#161b22] border border-[#21262d] rounded px-3 py-2 flex flex-col gap-0.5 min-w-[110px]">
             <p
@@ -291,7 +293,7 @@ export default function TransactionsTab() {
               style={{ color: netPositive ? '#34d399' : '#f87171' }}
             >
               {netPositive ? '+' : '-'}
-              {fmt(net)}
+              {fmtAbs(net)}
             </p>
           </div>
         </div>
@@ -459,7 +461,7 @@ export default function TransactionsTab() {
                       <TableCell className="text-right font-mono text-xs font-medium whitespace-nowrap">
                         <span style={{ color: positive ? '#34d399' : '#f87171' }}>
                           {positive ? '+' : '-'}
-                          {fmt(tx.amount)}
+                          {fmtAbs(tx.amount)}
                         </span>
                       </TableCell>
                     </TableRow>

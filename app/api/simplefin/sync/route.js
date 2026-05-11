@@ -130,8 +130,10 @@ export async function POST() {
     let transactionsSynced = 0
     let failedHoldings = 0
     let failedTransactions = 0
+    let failedAccounts = 0
 
     for (const sfAcc of sfAccounts) {
+     try {
       // Auto-detect credit cards: route them to liabilities + sync transactions via shadow account
       // Requires: ALTER TABLE batchfolio.liabilities ADD COLUMN IF NOT EXISTS simplefin_id text UNIQUE;
       //           ALTER TABLE batchfolio.liabilities ADD COLUMN IF NOT EXISTS is_synced boolean DEFAULT false;
@@ -463,6 +465,11 @@ export async function POST() {
           transactionsSynced++
         }
       }
+     } catch (err) {
+      failedAccounts++
+      console.error('Account sync failed:', sfAcc.name, err.message)
+      continue
+     }
     }
 
     // Write today's account balance snapshots
@@ -497,7 +504,7 @@ export async function POST() {
       })
       .eq('user_id', user.id)
 
-    return Response.json({ success: true, accountsSynced, holdingsSynced, transactionsSynced, failedHoldings, failedTransactions })
+    return Response.json({ success: true, accountsSynced, holdingsSynced, transactionsSynced, failedHoldings, failedTransactions, failedAccounts })
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 })
   }

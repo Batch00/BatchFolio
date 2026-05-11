@@ -23,6 +23,8 @@ import { Settings, LayoutDashboard, Briefcase, PieChart, Star, ShieldCheck, Plus
 import TickerSearch from '@/components/dashboard/TickerSearch'
 import { fmt } from '@/lib/format'
 
+const TICKER_REGEX = /^[A-Z0-9.\-]{1,10}$/
+
 const TABS = [
   { id: 'overview',      label: 'OVERVIEW',      icon: LayoutDashboard },
   { id: 'accounts',      label: 'ACCOUNTS',      icon: Briefcase },
@@ -119,11 +121,23 @@ export default function TopBar({
       }
 
       if (addType === 'holding') {
+        const tickerNorm = holdTicker.toUpperCase().trim()
+        if (!TICKER_REGEX.test(tickerNorm)) {
+          throw new Error('Invalid ticker symbol')
+        }
+        const sharesNum = parseFloat(holdShares)
+        if (!Number.isFinite(sharesNum) || sharesNum <= 0) {
+          throw new Error('Shares must be a positive number')
+        }
+        const costNum = parseFloat(holdCost)
+        if (!Number.isFinite(costNum) || costNum < 0) {
+          throw new Error('Cost basis must be a valid number')
+        }
         const { error: err } = await supabase.from('holdings').insert({
           account_id: holdAccountId,
-          ticker: holdTicker.toUpperCase().trim(),
-          shares: parseFloat(holdShares),
-          avg_cost_basis: parseFloat(holdCost),
+          ticker: tickerNorm,
+          shares: sharesNum,
+          avg_cost_basis: costNum,
         })
         if (err) throw err
         setHoldTicker('')
@@ -134,6 +148,9 @@ export default function TopBar({
 
       if (addType === 'watchlist') {
         const ticker = wlTicker.toUpperCase().trim()
+        if (!TICKER_REGEX.test(ticker)) {
+          throw new Error('Invalid ticker symbol')
+        }
         const { error: err } = await supabase
           .from('watchlist')
           .insert({ user_id: currentUser.id, ticker })

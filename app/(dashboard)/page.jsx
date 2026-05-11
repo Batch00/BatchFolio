@@ -93,22 +93,27 @@ export default function App() {
 
   // Version polling
   useEffect(() => {
+    const controller = new AbortController()
+
     async function fetchVersion() {
       try {
-        const res = await fetch('/api/version')
+        const res = await fetch('/api/version', { signal: controller.signal })
         const { version } = await res.json()
         if (!initialVersionRef.current) {
           initialVersionRef.current = version
         }
         setCurrentVersion(version)
-      } catch {
-        // network error - ignore
+      } catch (err) {
+        if (err.name === 'AbortError') return
       }
     }
 
     fetchVersion()
     const interval = setInterval(fetchVersion, 60_000)
-    return () => clearInterval(interval)
+    return () => {
+      controller.abort()
+      clearInterval(interval)
+    }
   }, [])
 
   const handleDataLoaded = useCallback((data) => {

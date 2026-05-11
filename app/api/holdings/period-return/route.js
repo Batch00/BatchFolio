@@ -21,19 +21,25 @@ export async function GET(request) {
       .filter(Boolean)
       .slice(0, 50)
 
+    const { data: allSnaps } = await supabase
+      .from('holding_snapshots')
+      .select('ticker, date, price, market_value')
+      .eq('user_id', user.id)
+      .in('ticker', tickerList)
+      .order('date', { ascending: true })
+
+    const byTicker = {}
+    ;(allSnaps ?? []).forEach((s) => {
+      if (!byTicker[s.ticker]) byTicker[s.ticker] = []
+      byTicker[s.ticker].push(s)
+    })
+
     const results = {}
-
-    await Promise.all(tickerList.map(async (ticker) => {
-      const { data: snaps } = await supabase
-        .from('holding_snapshots')
-        .select('date, price, market_value')
-        .eq('user_id', user.id)
-        .eq('ticker', ticker)
-        .order('date', { ascending: true })
-
+    for (const ticker of tickerList) {
+      const snaps = byTicker[ticker]
       if (!snaps || snaps.length < 2) {
         results[ticker] = { hasData: false }
-        return
+        continue
       }
 
       const first = snaps[0]
@@ -55,7 +61,7 @@ export async function GET(request) {
         endPrice: last.price,
         dataPoints: snaps.length,
       }
-    }))
+    }
 
     return NextResponse.json({ results })
   } catch (err) {

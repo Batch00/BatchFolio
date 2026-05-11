@@ -1,7 +1,7 @@
 // Deploy with:
 // supabase functions deploy nightly-snapshot
-// Schedule nightly at midnight UTC in Supabase dashboard >
-// Edge Functions > nightly-snapshot > Schedule (cron: 0 0 * * *)
+// Schedule nightly at 23:00 UTC in Supabase dashboard >
+// Edge Functions > nightly-snapshot > Schedule (cron: 0 23 * * *)
 // Required secrets: FINNHUB_API_KEY, APP_SUPABASE_URL,
 // SERVICE_ROLE_KEY, DEMO_USER_ID (optional - skips demo user)
 //
@@ -375,8 +375,8 @@ async function syncSimpleFINForUser(
         connection_errors: connectionErrors.length > 0 ? connectionErrors : null,
       })
       .eq('user_id', uid)
-  } catch {
-    // Sync failure is non-fatal - proceed with snapshot using existing data
+  } catch (err) {
+    console.error('[nightly] SimpleFIN sync failed for', uid, String(err))
   }
 }
 

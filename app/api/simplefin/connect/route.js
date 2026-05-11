@@ -10,7 +10,17 @@ export async function POST(request) {
     }
 
     // Decode base64 setup token to get claim URL
-    const claimUrl = Buffer.from(setupToken.trim(), 'base64').toString('utf-8')
+    const claimUrl = Buffer.from(setupToken.trim(), 'base64').toString('utf-8').trim()
+
+    const allowedHosts = ['bridge.simplefin.org', 'beta-bridge.simplefin.org']
+    try {
+      const parsed = new URL(claimUrl)
+      if (!allowedHosts.includes(parsed.host)) {
+        return Response.json({ error: 'Invalid setup token' }, { status: 400 })
+      }
+    } catch {
+      return Response.json({ error: 'Invalid setup token format' }, { status: 400 })
+    }
 
     // POST to claim URL to exchange for access URL (one-time use)
     const claimRes = await fetch(claimUrl, { method: 'POST' })

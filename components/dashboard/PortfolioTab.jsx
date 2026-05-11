@@ -112,7 +112,10 @@ export default function PortfolioTab({ onOpenDrawer }) {
     }
 
     setTotalLiabilities(
-      (liabRes.data ?? []).reduce((s, l) => s + (parseFloat(l.balance) || 0), 0)
+      (liabRes.data ?? []).reduce(
+        (s, l) => s + (Number.isFinite(Number(l.balance)) ? Number(l.balance) : 0),
+        0,
+      ),
     )
 
     const excludedAccountIds = new Set(
@@ -305,7 +308,10 @@ export default function PortfolioTab({ onOpenDrawer }) {
     return sortDir === 'asc' ? av - bv : bv - av
   })
 
-  const totalValue = filteredRows.reduce((s, r) => s + r.value, 0)
+  const totalValue = filteredRows.reduce(
+    (s, r) => s + (Number.isFinite(Number(r.value)) ? Number(r.value) : 0),
+    0,
+  )
 
   // Account summary: synced accounts use SimpleFIN balance, manual use holdings value
   const getAccountValue = (acc) => accountValues[acc.id] || 0

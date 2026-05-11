@@ -25,6 +25,8 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
   const [presetQuotes, setPresetQuotes] = useState({})
   const [presetLoading, setPresetLoading] = useState(false)
   const presetCache = useRef({})
+  const presetCacheTime = useRef({})
+  const CACHE_TTL = 5 * 60 * 1000
 
   const loadWatchlist = useCallback(async () => {
     setLoading(true)
@@ -91,8 +93,10 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     const preset = PRESET_WATCHLISTS.find((p) => p.id === activeList)
     if (!preset) return
 
-    if (presetCache.current[activeList]) {
-      setPresetQuotes(presetCache.current[activeList])
+    const cached = presetCache.current[activeList]
+    const cacheAge = Date.now() - (presetCacheTime.current[activeList] || 0)
+    if (cached && cacheAge < CACHE_TTL) {
+      setPresetQuotes(cached)
       return
     }
 
@@ -121,6 +125,7 @@ export default function WatchlistTab({ onOpenDrawer, isDemo, onDemoBlock }) {
       )
       if (!cancelled) {
         presetCache.current[activeList] = results
+        presetCacheTime.current[activeList] = Date.now()
         setPresetQuotes(results)
         setPresetLoading(false)
       }
