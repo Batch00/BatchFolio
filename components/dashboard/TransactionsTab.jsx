@@ -42,54 +42,18 @@ const DATE_RANGES = [
   { id: '90d', label: 'Last 90 days', days: 90 },
 ]
 
-const CATEGORY_COLORS = {
-  Gas: '#f59e0b',
-  Groceries: '#34d399',
-  Dining: '#f97316',
-  Shopping: '#3b82f6',
-  Recreation: '#8b5cf6',
-  Income: '#10b981',
-  Investment: '#06b6d4',
-  Payroll: '#84cc16',
-  Bills: '#ef4444',
-  Cash: '#6b7280',
-  Other: '#7d8590',
-}
-
-const ALL_CATEGORIES = [
-  'Gas', 'Groceries', 'Dining', 'Shopping', 'Recreation',
-  'Income', 'Investment', 'Payroll', 'Bills', 'Cash', 'Other',
-]
-
-function getCategory(payee, description) {
-  const text = ((payee || '') + ' ' + (description || '')).toLowerCase()
-  // Investment/income patterns first — catches 401k/retirement transactions before spending rules
-  if (/dividend|interest earned|capital gain|distribution|reinvest/.test(text)) return 'Income'
-  if (/bought|sold|purchase|redemption|exchange|transfer|rollover|contribution|withdrawal|you bought|you sold/.test(text)) return 'Investment'
-  if (/payroll|salary|direct deposit|paycheck/.test(text)) return 'Payroll'
-  // Spending categories
-  if (/gas|fuel|shell|bp|exxon|chevron|kwik trip|casey/.test(text)) return 'Gas'
-  if (/grocery|walmart|target|kroger|whole foods|aldi|woodman|meijer/.test(text)) return 'Groceries'
-  if (/restaurant|cafe|coffee|mcdonald|starbucks|chipotle|pizza|burger|taco|subway/.test(text)) return 'Dining'
-  if (/amazon|ebay|etsy|shop|store|mall/.test(text)) return 'Shopping'
-  if (/golf|gym|sport|fitness|recreation|country club|creek/.test(text)) return 'Recreation'
-  if (/electric|gas bill|water|utility|internet|phone|insurance/.test(text)) return 'Bills'
-  if (/atm|cash|withdrawal/.test(text)) return 'Cash'
-  return 'Other'
-}
-
 export default function TransactionsTab() {
   const supabase = createClient()
 
   const [transactions, setTransactions] = useState([])
-  const [accounts, setAccounts] = useState([])
-  const [syncedLiabilities, setSyncedLiabilities] = useState([])
+  const [accountPills, setAccountPills] = useState([
+    { id: 'all', name: 'All Accounts', type: 'all' },
+  ])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   const [dateRange, setDateRange] = useState('30d')
   const [selectedAccount, setSelectedAccount] = useState('all')
-  const [selectedCategory, setSelectedCategory] = useState('all')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
 
@@ -110,13 +74,21 @@ export default function TransactionsTab() {
     const fromDate = new Date()
     fromDate.setDate(fromDate.getDate() - rangeDays)
 
-    // Determine if the selected filter is a liability (credit card)
     const isLiabilityFilter = selectedAccount.startsWith('liability:')
     const liabilityId = isLiabilityFilter ? selectedAccount.replace('liability:', '') : null
 
     const [accsRes, liabsRes, txRes] = await Promise.all([
-      supabase.from('accounts').select('id, name, is_hidden').order('created_at', { ascending: false }),
-      supabase.from('liabilities').select('id, name, simplefin_id').eq('user_id', user.id).not('simplefin_id', 'is', null).order('name'),
+      supabase
+        .from('accounts')
+        .select('id, name')
+        .eq('user_id', user.id)
+        .eq('is_hidden', false)
+        .order('sort_order', { ascending: true }),
+      supabase
+        .from('liabilities')
+        .select('id, name, simplefin_id')
+        .eq('user_id', user.id)
+        .not('simplefin_id', 'is', null),
       (() => {
         let q = supabase
           .from('transactions')
@@ -139,9 +111,13 @@ export default function TransactionsTab() {
     } else {
       setTransactions(txRes.data ?? [])
     }
-    // Filter out hidden shadow accounts from the dropdown
-    setAccounts((accsRes.data ?? []).filter((a) => !a.is_hidden))
-    setSyncedLiabilities(liabsRes.data ?? [])
+
+    setAccountPills([
+      { id: 'all', name: 'All Accounts', type: 'all' },
+      ...(accsRes.data ?? []).map((a) => ({ ...a, type: 'account' })),
+      ...(liabsRes.data ?? []).map((l) => ({ ...l, type: 'liability' })),
+    ])
+
     setLoading(false)
   }, [dateRange, selectedAccount])
 
@@ -149,15 +125,8 @@ export default function TransactionsTab() {
     loadData()
   }, [loadData])
 
-  // Enrich with category
-  const enriched = transactions.map((tx) => ({
-    ...tx,
-    category: getCategory(tx.payee, tx.description),
-  }))
-
-  // Client-side filter
-  const filtered = enriched.filter((tx) => {
-    if (selectedCategory !== 'all' && tx.category !== selectedCategory) return false
+  // Client-side search filter
+  const filtered = transactions.filter((tx) => {
     if (!search.trim()) return true
     const q = search.toLowerCase()
     return (
@@ -178,8 +147,26 @@ export default function TransactionsTab() {
   const startIdx = page * PAGE_SIZE + 1
   const endIdx = Math.min((page + 1) * PAGE_SIZE, filtered.length)
 
-  // Get categories that have transactions
-  const activeCats = ALL_CATEGORIES.filter((c) => enriched.some((tx) => tx.category === c))
+  const selectedPillId =
+    selectedAccount === 'all'
+      ? 'all'
+      : selectedAccount.startsWith('liability:')
+        ? selectedAccount
+        : selectedAccount
+
+  const getPillValue = (pill) => {
+    if (pill.type === 'all') return 'all'
+    if (pill.type === 'liability') return `liability:${pill.id}`
+    return pill.id
+  }
+
+  const selectedPill = accountPills.find((p) => getPillValue(p) === selectedPillId)
+  const selectedAccountName =
+    selectedPill && selectedPill.type !== 'all' ? selectedPill.name : null
+  const rangeLabel = DATE_RANGES.find((r) => r.id === dateRange)?.label?.toLowerCase() ?? ''
+  const summaryContext = selectedAccountName
+    ? `${selectedAccountName} - ${rangeLabel}`
+    : rangeLabel
 
   return (
     <div className="p-4 space-y-4">
@@ -210,42 +197,6 @@ export default function TransactionsTab() {
               ))}
             </SelectContent>
           </Select>
-          <Select
-            value={selectedAccount}
-            onValueChange={(v) => {
-              setSelectedAccount(v)
-              setPage(0)
-            }}
-          >
-            <SelectTrigger className="w-full md:w-44 text-xs h-8">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">
-                All Accounts
-              </SelectItem>
-              {accounts.map((a) => (
-                <SelectItem key={a.id} value={a.id} className="text-xs">
-                  {a.name}
-                </SelectItem>
-              ))}
-              {syncedLiabilities.length > 0 && (
-                <>
-                  <div
-                    className="px-2 py-1.5 font-mono"
-                    style={{ fontSize: 9, color: '#7d8590', letterSpacing: '0.06em', textTransform: 'uppercase' }}
-                  >
-                    Credit Cards
-                  </div>
-                  {syncedLiabilities.map((l) => (
-                    <SelectItem key={l.id} value={`liability:${l.id}`} className="text-xs">
-                      {l.name}
-                    </SelectItem>
-                  ))}
-                </>
-              )}
-            </SelectContent>
-          </Select>
           <Input
             value={search}
             onChange={(e) => {
@@ -260,90 +211,97 @@ export default function TransactionsTab() {
 
       {error && <p className="text-xs text-[#f87171]">{error}</p>}
 
-      {/* Summary chips */}
-      {!loading && (
-        <div className="flex flex-wrap gap-3">
-          <div className="bg-[#161b22] border border-[#21262d] rounded px-3 py-2 flex flex-col gap-0.5 min-w-[110px]">
-            <p
-              className="text-[10px] uppercase font-mono text-[#7d8590]"
-              style={{ letterSpacing: '0.06em' }}
-            >
-              Total In
-            </p>
-            <p className="font-mono text-sm font-semibold text-[#34d399]">+{fmtAbs(totalIn)}</p>
-          </div>
-          <div className="bg-[#161b22] border border-[#21262d] rounded px-3 py-2 flex flex-col gap-0.5 min-w-[110px]">
-            <p
-              className="text-[10px] uppercase font-mono text-[#7d8590]"
-              style={{ letterSpacing: '0.06em' }}
-            >
-              Total Out
-            </p>
-            <p className="font-mono text-sm font-semibold text-[#f87171]">-{fmtAbs(totalOut)}</p>
-          </div>
-          <div className="bg-[#161b22] border border-[#21262d] rounded px-3 py-2 flex flex-col gap-0.5 min-w-[110px]">
-            <p
-              className="text-[10px] uppercase font-mono text-[#7d8590]"
-              style={{ letterSpacing: '0.06em' }}
-            >
-              Net
-            </p>
-            <p
-              className="font-mono text-sm font-semibold"
-              style={{ color: netPositive ? '#34d399' : '#f87171' }}
-            >
-              {netPositive ? '+' : '-'}
-              {fmtAbs(net)}
-            </p>
-          </div>
+      {/* Account filter pills */}
+      {!loading && accountPills.length > 1 && (
+        <div
+          className="flex"
+          style={{
+            gap: 6,
+            overflowX: 'auto',
+            whiteSpace: 'nowrap',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+            paddingBottom: 4,
+          }}
+        >
+          {accountPills.map((pill) => {
+            const value = getPillValue(pill)
+            const active = selectedPillId === value
+            return (
+              <button
+                key={`${pill.type}:${pill.id}`}
+                onClick={() => {
+                  setSelectedAccount(value)
+                  setPage(0)
+                }}
+                className="transition-colors flex-shrink-0"
+                style={{
+                  fontSize: 12,
+                  padding: '5px 14px',
+                  borderRadius: 20,
+                  border: `1px solid ${active ? '#10b981' : '#21262d'}`,
+                  background: active ? 'rgba(16,185,129,0.12)' : 'transparent',
+                  color: active ? '#10b981' : '#7d8590',
+                  maxWidth: 150,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={pill.name}
+              >
+                {pill.name}
+              </button>
+            )
+          })}
         </div>
       )}
 
-      {/* Category filter pills */}
-      {!loading && activeCats.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            onClick={() => {
-              setSelectedCategory('all')
-              setPage(0)
-            }}
-            className="font-mono transition-colors"
-            style={{
-              fontSize: 10,
-              letterSpacing: '0.04em',
-              padding: '3px 8px',
-              borderRadius: 3,
-              border: `1px solid ${selectedCategory === 'all' ? '#10b981' : '#21262d'}`,
-              background: selectedCategory === 'all' ? 'rgba(16,185,129,0.12)' : 'transparent',
-              color: selectedCategory === 'all' ? '#10b981' : '#7d8590',
-            }}
-          >
-            ALL
-          </button>
-          {activeCats.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => {
-                setSelectedCategory(selectedCategory === cat ? 'all' : cat)
-                setPage(0)
-              }}
-              className="font-mono transition-colors"
-              style={{
-                fontSize: 10,
-                letterSpacing: '0.04em',
-                padding: '3px 8px',
-                borderRadius: 3,
-                border: `1px solid ${selectedCategory === cat ? (CATEGORY_COLORS[cat] ?? '#10b981') : '#21262d'}`,
-                background:
-                  selectedCategory === cat
-                    ? `${CATEGORY_COLORS[cat] ?? '#10b981'}20`
-                    : 'transparent',
-                color: selectedCategory === cat ? (CATEGORY_COLORS[cat] ?? '#10b981') : '#7d8590',
-              }}
+      {/* Summary chips */}
+      {!loading && (
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap gap-3">
+            <div className="bg-[#161b22] border border-[#21262d] rounded px-3 py-2 flex flex-col gap-0.5 min-w-[110px]">
+              <p
+                className="text-[10px] uppercase font-mono text-[#7d8590]"
+                style={{ letterSpacing: '0.06em' }}
+              >
+                Total In
+              </p>
+              <p className="font-mono text-sm font-semibold text-[#34d399]">+{fmtAbs(totalIn)}</p>
+            </div>
+            <div className="bg-[#161b22] border border-[#21262d] rounded px-3 py-2 flex flex-col gap-0.5 min-w-[110px]">
+              <p
+                className="text-[10px] uppercase font-mono text-[#7d8590]"
+                style={{ letterSpacing: '0.06em' }}
+              >
+                Total Out
+              </p>
+              <p className="font-mono text-sm font-semibold text-[#f87171]">-{fmtAbs(totalOut)}</p>
+            </div>
+            <div className="bg-[#161b22] border border-[#21262d] rounded px-3 py-2 flex flex-col gap-0.5 min-w-[110px]">
+              <p
+                className="text-[10px] uppercase font-mono text-[#7d8590]"
+                style={{ letterSpacing: '0.06em' }}
+              >
+                Net
+              </p>
+              <p
+                className="font-mono text-sm font-semibold"
+                style={{ color: netPositive ? '#34d399' : '#f87171' }}
+              >
+                {netPositive ? '+' : '-'}
+                {fmtAbs(net)}
+              </p>
+            </div>
+          </div>
+          {summaryContext && (
+            <p
+              className="text-[10px] font-mono text-[#7d8590]"
+              style={{ letterSpacing: '0.04em' }}
             >
-              {cat.toUpperCase()}
-            </button>
-          ))}
+              {summaryContext}
+            </p>
+          )}
         </div>
       )}
 
@@ -354,11 +312,15 @@ export default function TransactionsTab() {
             <TableHeader>
               <TableRow>
                 <TableHead style={{ width: 100 }}>Date</TableHead>
-                <TableHead style={{ width: 130 }}>Account</TableHead>
+                <TableHead className="hidden md:table-cell" style={{ width: 140 }}>
+                  Account
+                </TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead style={{ width: 90 }}>Category</TableHead>
                 <TableHead className="text-right" style={{ width: 100 }}>
                   Amount
+                </TableHead>
+                <TableHead className="hidden md:table-cell" style={{ width: 120 }}>
+                  Memo
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -369,17 +331,17 @@ export default function TransactionsTab() {
                     <TableCell>
                       <Skeleton className="h-4 w-20" />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell">
                       <Skeleton className="h-4 w-24" />
                     </TableCell>
                     <TableCell>
                       <Skeleton className="h-4 w-40" />
                     </TableCell>
                     <TableCell>
-                      <Skeleton className="h-4 w-16" />
-                    </TableCell>
-                    <TableCell>
                       <Skeleton className="h-4 w-16 ml-auto" />
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <Skeleton className="h-4 w-20" />
                     </TableCell>
                   </TableRow>
                 ))
@@ -392,12 +354,13 @@ export default function TransactionsTab() {
               ) : (
                 paginated.map((tx, idx) => {
                   const positive = tx.amount > 0
-                  const primaryLabel = tx.payee || tx.description || '--'
+                  const rawPrimary = tx.payee || tx.description || '--'
+                  const primaryLabel =
+                    rawPrimary.length > 40 ? rawPrimary.slice(0, 40) + '...' : rawPrimary
                   const secondaryLabel =
                     tx.payee && tx.description && tx.description !== tx.payee
                       ? tx.description
                       : null
-                  const catColor = CATEGORY_COLORS[tx.category] ?? '#7d8590'
                   return (
                     <TableRow
                       key={tx.id}
@@ -410,8 +373,8 @@ export default function TransactionsTab() {
                         {fmtDate(tx.posted_at)}
                       </TableCell>
                       <TableCell
-                        className="text-xs text-[#7d8590] truncate"
-                        style={{ maxWidth: 130 }}
+                        className="text-xs text-[#7d8590] truncate hidden md:table-cell"
+                        style={{ maxWidth: 140 }}
                         title={tx.liabilities?.name ?? tx.accounts?.name ?? ''}
                       >
                         {tx.liabilities?.name ?? tx.accounts?.name ?? '--'}
@@ -419,15 +382,14 @@ export default function TransactionsTab() {
                       <TableCell>
                         <span
                           className="text-xs text-[#e6edf3] block truncate"
-                          style={{ minWidth: 200, maxWidth: 320 }}
-                          title={primaryLabel}
+                          title={rawPrimary}
                         >
                           {primaryLabel}
                         </span>
                         {secondaryLabel && (
                           <span
                             className="text-[#7d8590] block truncate"
-                            style={{ fontSize: 10, maxWidth: 320 }}
+                            style={{ fontSize: 10 }}
                             title={secondaryLabel}
                           >
                             {secondaryLabel}
@@ -442,27 +404,18 @@ export default function TransactionsTab() {
                           </span>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <span
-                          className="font-mono"
-                          style={{
-                            fontSize: 9,
-                            color: catColor,
-                            background: `${catColor}18`,
-                            padding: '2px 5px',
-                            borderRadius: 3,
-                            letterSpacing: '0.04em',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {(tx.category || 'Other').toUpperCase()}
-                        </span>
-                      </TableCell>
                       <TableCell className="text-right font-mono text-xs font-medium whitespace-nowrap">
                         <span style={{ color: positive ? '#34d399' : '#f87171' }}>
                           {positive ? '+' : '-'}
                           {fmtAbs(tx.amount)}
                         </span>
+                      </TableCell>
+                      <TableCell
+                        className="text-xs text-[#7d8590] truncate hidden md:table-cell"
+                        style={{ maxWidth: 120 }}
+                        title={tx.memo ?? ''}
+                      >
+                        {tx.memo || '--'}
                       </TableCell>
                     </TableRow>
                   )
