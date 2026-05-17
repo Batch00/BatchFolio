@@ -49,7 +49,9 @@ export async function GET(request) {
         ? ((last.price - first.price) / first.price) * 100
         : 0
 
-      const dollarChange = last.market_value - first.market_value
+      const dollarChange = last.market_value > 0 && first.price > 0 && last.price > 0
+        ? last.market_value - (last.market_value / last.price) * first.price
+        : 0
 
       results[ticker] = {
         hasData: true,

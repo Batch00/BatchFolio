@@ -182,6 +182,8 @@ function SortableAccountRow({
   const [holdingPeriodReturns, setHoldingPeriodReturns] = useState({})
   const [periodReturnLoading, setPeriodReturnLoading] = useState(false)
 
+  const holdListKey = holdList.map((h) => h.id).join(',')
+
   useEffect(() => {
     if (!isExpanded) return
     const noBasisTickers = holdList
@@ -194,7 +196,8 @@ function SortableAccountRow({
       .then((d) => setHoldingPeriodReturns(d.results || {}))
       .catch(() => {})
       .finally(() => setPeriodReturnLoading(false))
-  }, [isExpanded, holdList])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isExpanded, holdListKey])
 
   function get7DReturn(ticker) {
     if (ticker === 'CASH') return null
