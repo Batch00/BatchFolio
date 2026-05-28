@@ -400,6 +400,22 @@ export async function POST() {
             .eq('account_id', accountId)
             .eq('simplefin_id', `${sfAcc.id}-cash`)
         }
+
+        // Delete synced holdings no longer returned by SimpleFIN (sold positions)
+        const returnedHoldingIds = new Set(sfHoldings.map((h) => h.id))
+        const { data: existingHoldings } = await supabase
+          .from('holdings')
+          .select('id, simplefin_id, ticker')
+          .eq('account_id', accountId)
+          .eq('is_synced', true)
+          .not('simplefin_id', 'like', '%-cash')
+        const toDelete = (existingHoldings || []).filter(
+          (h) => h.simplefin_id && !returnedHoldingIds.has(h.simplefin_id)
+        )
+        for (const h of toDelete) {
+          await supabase.from('holdings').delete().eq('id', h.id)
+          console.log('Removed stale holding:', h.ticker, h.simplefin_id)
+        }
       } else if (sfAcc.balance != null) {
         // Cash account — store as CASH holding
         // Use 0.01 minimum to satisfy the avg_cost_basis > 0 check constraint

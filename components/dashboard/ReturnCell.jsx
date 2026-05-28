@@ -8,12 +8,12 @@ function formatShortDate(dateStr) {
     .toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export default function ReturnCell({ ticker, avgCostBasis, currentPrice, shares, periodReturn, loading }) {
+export default function ReturnCell({ ticker, avgCostBasis, currentPrice, shares, isSynced, periodReturn, loading }) {
   if (ticker === 'CASH') {
     return <span style={{ color: '#7d8590', fontFamily: 'monospace', fontSize: 12 }}>--</span>
   }
 
-  const hasCostBasis = avgCostBasis > 0 && currentPrice > 0
+  const hasCostBasis = avgCostBasis > 0 && currentPrice > 0 && !isSynced
 
   if (hasCostBasis) {
     const gainDollar = (currentPrice - avgCostBasis) * shares

@@ -28,7 +28,7 @@ const COLS = [
   { key: 'livePrice', label: 'Price', numeric: true },
   { key: 'ret7d', label: '7D', numeric: true, noSort: true, hideMobile: true },
   { key: 'value', label: 'Value', numeric: true },
-  { key: 'gainLoss', label: 'Return', numeric: true, noSort: true, tooltip: 'Cost basis gain/loss for holdings where available. Price change since first snapshot for holdings without cost basis.' },
+  { key: 'gainLoss', label: 'Return', numeric: true, noSort: true, tooltip: 'All-time gain/loss for manual holdings. Price change since first snapshot for synced holdings.' },
 ]
 
 function SortIcon({ dir }) {
@@ -238,10 +238,10 @@ export default function PortfolioTab({ onOpenDrawer }) {
 
     setRows(Object.values(mergedMap))
 
-    // Fetch period returns for holdings without cost basis
+    // Fetch period returns for synced holdings and holdings without cost basis
     const tickersNeedingPeriodReturn = [...new Set(
       Object.values(mergedMap)
-        .filter((h) => h.ticker !== 'CASH' && (!h.avgCost || h.avgCost <= 0))
+        .filter((h) => h.ticker !== 'CASH' && (h.is_synced || !h.avgCost || h.avgCost <= 0))
         .map((h) => h.ticker)
     )]
     if (tickersNeedingPeriodReturn.length > 0) {
@@ -821,6 +821,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                             avgCostBasis={h.avgCost}
                             currentPrice={h.livePrice}
                             shares={h.shares}
+                            isSynced={h.is_synced}
                             periodReturn={periodReturns[h.ticker]}
                             loading={periodReturnLoading}
                           />

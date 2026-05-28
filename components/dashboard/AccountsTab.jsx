@@ -155,7 +155,7 @@ function AccountReturnBanner({ accountId }) {
         </div>
       </div>
       <p style={{ fontSize: 10, color: '#7d8590', marginTop: 4 }}>
-        Cost basis unavailable from provider. Showing account balance change over time.
+        Showing account balance change based on nightly snapshots.
       </p>
     </div>
   )
@@ -187,7 +187,7 @@ function SortableAccountRow({
   useEffect(() => {
     if (!isExpanded) return
     const noBasisTickers = holdList
-      .filter((h) => h.ticker !== 'CASH' && (!h.avg_cost_basis || h.avg_cost_basis <= 0))
+      .filter((h) => h.ticker !== 'CASH' && (h.is_synced || !h.avg_cost_basis || h.avg_cost_basis <= 0))
       .map((h) => h.ticker)
     if (noBasisTickers.length === 0) return
     setPeriodReturnLoading(true)
@@ -368,7 +368,7 @@ function SortableAccountRow({
               </button>
             </div>
           )}
-          {!hasGainData && holdList.length > 0 && (
+          {acc.is_synced && holdList.length > 0 && (
             <AccountReturnBanner accountId={acc.id} />
           )}
           {holdList.length === 0 ? (
@@ -395,7 +395,7 @@ function SortableAccountRow({
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">Avg Cost</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Price</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Value</th>
-                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} title="Cost basis gain/loss for holdings where available. Price change since first snapshot for holdings without cost basis.">Return</th>
+                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} title="All-time gain/loss for manual holdings. Price change since first snapshot for synced holdings.">Return</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">7D</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} />
                   </tr>
@@ -451,6 +451,7 @@ function SortableAccountRow({
                             avgCostBasis={h.avg_cost_basis}
                             currentPrice={livePrice}
                             shares={h.shares}
+                            isSynced={h.is_synced}
                             periodReturn={holdingPeriodReturns[h.ticker]}
                             loading={periodReturnLoading}
                           />

@@ -324,6 +324,21 @@ async function syncSimpleFINForUser(
             .eq('account_id', accountId)
             .eq('simplefin_id', `${sfAcc.id}-cash`)
         }
+
+        // Delete synced holdings no longer returned by SimpleFIN (sold positions)
+        const returnedHoldingIds = new Set(sfHoldings.map((h: any) => h.id))
+        const { data: existingHoldings } = await (supabase as any).schema('batchfolio').from('holdings')
+          .select('id, simplefin_id, ticker')
+          .eq('account_id', accountId)
+          .eq('is_synced', true)
+          .not('simplefin_id', 'like', '%-cash')
+        const toDelete = ((existingHoldings as any[] | null) ?? []).filter(
+          (h: any) => h.simplefin_id && !returnedHoldingIds.has(h.simplefin_id)
+        )
+        for (const h of toDelete) {
+          await (supabase as any).schema('batchfolio').from('holdings').delete().eq('id', h.id)
+          console.log('Removed stale holding:', h.ticker, h.simplefin_id)
+        }
       } else if (sfAcc.balance != null) {
         await (supabase as any).schema('batchfolio').from('holdings').upsert(
           {
