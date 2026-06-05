@@ -345,16 +345,18 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
       </div>
 
       {/* Row 2: Holdings (1.8fr) | Allocation (1fr) | Top Movers (1fr) */}
-      <div className="grid grid-cols-1 md:grid-cols-[1.8fr_1fr_1fr] gap-4 items-stretch">
-        <ErrorBoundary>
-          <HoldingsWidget
-            loading={loading}
-            holdings={enrichedHoldings}
-            sparklines={sparklines}
-            onOpenDrawer={onOpenDrawer}
-            range={range}
-          />
-        </ErrorBoundary>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[1.8fr_1fr_1fr] gap-4 items-stretch">
+        <div className="md:col-span-2 xl:col-span-1">
+          <ErrorBoundary>
+            <HoldingsWidget
+              loading={loading}
+              holdings={enrichedHoldings}
+              sparklines={sparklines}
+              onOpenDrawer={onOpenDrawer}
+              range={range}
+            />
+          </ErrorBoundary>
+        </div>
         <ErrorBoundary>
           <AllocationWidget loading={loading} holdings={enrichedHoldings} />
         </ErrorBoundary>
