@@ -9,6 +9,9 @@
 // alter table batchfolio.accounts add column if not exists is_excluded boolean default false;
 // alter table batchfolio.liabilities add column if not exists simplefin_id text unique;
 // alter table batchfolio.liabilities add column if not exists is_synced boolean default false;
+// alter table batchfolio.holdings add column if not exists security_type text;
+// alter table batchfolio.holdings add column if not exists provider_description text;
+// alter table batchfolio.holdings add column if not exists metadata_refreshed_at timestamptz;
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -35,9 +38,66 @@ function isCreditCardAccount(name: string, balance?: string): boolean {
   )
 }
 
+const TICKER_REGEX = /^[A-Z0-9.\-]{1,10}$/
+const METADATA_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+// Mirrors resolveHoldingMetadata in lib/security-metadata.js - keep in sync.
+// Re-pulls name and security type from Finnhub when the holding is new, its ticker or
+// SimpleFIN name changed, or the cache is older than METADATA_TTL_MS. Otherwise keeps the
+// cached values so a stale broker description (e.g. a reassigned ticker) cannot overwrite them.
+async function resolveHoldingMetadata(
+  existing: any,
+  ticker: string,
+  providerDescription: string | undefined,
+  finnhubKey: string,
+): Promise<Record<string, string | null>> {
+  const providerDesc = providerDescription || null
+  const sameTicker = existing?.ticker === ticker
+  const stale =
+    !existing ||
+    !sameTicker ||
+    existing.provider_description !== providerDesc ||
+    !existing.metadata_refreshed_at ||
+    Date.now() - new Date(existing.metadata_refreshed_at).getTime() > METADATA_TTL_MS
+
+  if (!stale) {
+    return { description: existing.description, provider_description: providerDesc }
+  }
+
+  try {
+    let meta: { name: string | null; searchName: string | null; type: string | null } | null = null
+    if (ticker && ticker !== 'CASH' && TICKER_REGEX.test(ticker)) {
+      const finnhub = async (path: string) => {
+        const res = await fetch(`https://finnhub.io/api/v1${path}&token=${finnhubKey}`)
+        if (!res.ok) throw new Error(`Finnhub error ${res.status}`)
+        return res.json()
+      }
+      const search = await finnhub(`/search?q=${ticker}`)
+      const match = (search.result || []).find((r: any) => r.symbol === ticker)
+      if (match) {
+        // profile2 is empty for ETFs and 403s for some symbols; fall back to other names
+        const profile = await finnhub(`/stock/profile2?symbol=${ticker}`).catch(() => ({}))
+        meta = { name: profile.name || null, searchName: match.description || null, type: match.type || null }
+      }
+    }
+    return {
+      // Search names are all caps and truncated, so prefer SimpleFIN's name over them
+      description: meta?.name || providerDesc || meta?.searchName || null,
+      security_type: meta?.type || null,
+      provider_description: providerDesc,
+      metadata_refreshed_at: new Date().toISOString(),
+    }
+  } catch (err) {
+    console.error('Security metadata error:', ticker, (err as Error).message)
+    // Leave provider_description unchanged so the next run retries
+    return { description: sameTicker && existing.description ? existing.description : providerDesc }
+  }
+}
+
 async function syncSimpleFINForUser(
   supabase: ReturnType<typeof createClient>,
   uid: string,
+  finnhubKey: string,
 ): Promise<void> {
   const { data: conn } = await (supabase as any).schema('batchfolio').from('simplefin_connections')
     .select('access_url')
@@ -257,6 +317,11 @@ async function syncSimpleFINForUser(
       const sfHoldings = sfAcc.holdings ?? []
 
       if (sfHoldings.length > 0) {
+        const { data: cachedHoldings } = await (supabase as any).schema('batchfolio').from('holdings')
+          .select('simplefin_id, ticker, description, provider_description, metadata_refreshed_at')
+          .eq('account_id', accountId)
+        const cachedById = new Map((cachedHoldings || []).map((c: any) => [c.simplefin_id, c]))
+
         for (const h of sfHoldings) {
           const sh = parseFloat(h.shares ?? '0')
           const sharesNum = !isNaN(sh) ? sh : 0
@@ -277,6 +342,8 @@ async function syncSimpleFINForUser(
             ? mv / sh
             : (!isNaN(mv) && mv > 0 ? mv : null)
 
+          const metadata = await resolveHoldingMetadata(cachedById.get(h.id), h.symbol, h.description, finnhubKey)
+
           await (supabase as any).schema('batchfolio').from('holdings').upsert(
             {
               account_id: accountId,
@@ -286,7 +353,7 @@ async function syncSimpleFINForUser(
               simplefin_id: h.id,
               is_synced: true,
               last_synced_price: lastSyncedPrice,
-              description: h.description || null,
+              ...metadata,
               cost_basis_total: costBasisTotal,
               currency: h.currency || 'USD',
               purchase_price: purchasePrice,
@@ -428,7 +495,7 @@ Deno.serve(async () => {
 
     try {
       // Sync SimpleFIN data first (if user has a connection)
-      await syncSimpleFINForUser(supabase, uid)
+      await syncSimpleFINForUser(supabase, uid, finnhubKey)
 
       // Fetch accounts for this user (include balance for synced accounts, exclude excluded accounts)
       const { data: accounts } = await supabase.schema('batchfolio').from('accounts')

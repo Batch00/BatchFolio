@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { resolveHoldingMetadata } from '@/lib/security-metadata'
 
 // Required SQL migrations (run in Supabase SQL editor):
 // ALTER TABLE batchfolio.accounts DROP CONSTRAINT IF EXISTS accounts_type_check;
@@ -9,6 +10,9 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 // ALTER TABLE batchfolio.accounts ADD COLUMN IF NOT EXISTS provider_url text;
 // ALTER TABLE batchfolio.transactions ADD COLUMN IF NOT EXISTS tx_type text;
 // ALTER TABLE batchfolio.transactions ADD COLUMN IF NOT EXISTS liability_id uuid REFERENCES batchfolio.liabilities(id);
+// ALTER TABLE batchfolio.holdings ADD COLUMN IF NOT EXISTS security_type text;
+// ALTER TABLE batchfolio.holdings ADD COLUMN IF NOT EXISTS provider_description text;
+// ALTER TABLE batchfolio.holdings ADD COLUMN IF NOT EXISTS metadata_refreshed_at timestamptz;
 // -- Ensure unique constraint exists for shadow account upsert:
 // -- accounts already has unique on (user_id, simplefin_id) — verify with:
 // -- SELECT indexname FROM pg_indexes WHERE tablename = 'accounts' AND indexname LIKE '%simplefin%';
@@ -306,6 +310,12 @@ export async function POST() {
       const sfHoldings = sfAcc.holdings ?? []
 
       if (sfHoldings.length > 0) {
+        const { data: cachedHoldings } = await supabase
+          .from('holdings')
+          .select('simplefin_id, ticker, description, provider_description, metadata_refreshed_at')
+          .eq('account_id', accountId)
+        const cachedById = new Map((cachedHoldings || []).map((c) => [c.simplefin_id, c]))
+
         // Deduplicate by holding.id in case SimpleFIN returns duplicates
         const seenHoldingIds = new Set()
         for (const h of sfHoldings) {
@@ -338,6 +348,8 @@ export async function POST() {
             sharesNum = 1
           }
 
+          const metadata = await resolveHoldingMetadata(cachedById.get(h.id), h.symbol, h.description)
+
           const { error: holdErr } = await supabase
             .from('holdings')
             .upsert(
@@ -349,7 +361,7 @@ export async function POST() {
                 simplefin_id: h.id,
                 is_synced: true,
                 last_synced_price: lastSyncedPrice,
-                description: h.description || null,
+                ...metadata,
                 cost_basis_total: costBasisTotal,
                 currency: h.currency || 'USD',
                 purchase_price: purchasePrice,
