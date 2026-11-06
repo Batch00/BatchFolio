@@ -100,11 +100,13 @@ export function PeriodChangeCell({ change }) {
   if (!change) {
     return <span className="font-mono text-xs text-[#7d8590]">--</span>
   }
+  const flat = Math.abs(change.pctChange) < 0.005
   const pos = change.dollarChange >= 0
+  const color = flat ? 'text-[#7d8590]' : pos ? 'text-[#34d399]' : 'text-[#f87171]'
   return (
-    <div className={`font-mono text-xs ${pos ? 'text-[#34d399]' : 'text-[#f87171]'}`}>
-      <div>{pos ? '+' : ''}{fmt(change.dollarChange)}</div>
-      <div>{fmtPercent(change.pctChange)}</div>
+    <div className={`font-mono text-xs md:text-[13px] ${color}`}>
+      <div>{pos && !flat ? '+' : ''}{fmt(flat ? 0 : change.dollarChange)}</div>
+      <div>{flat ? '0.00%' : fmtPercent(change.pctChange)}</div>
       {change.since && (
         <div style={{ fontSize: 10, color: '#7d8590' }}>since {formatShortDate(change.since)}</div>
       )}

@@ -379,13 +379,13 @@ function SortableAccountRow({
                 {/* On phones: Holding (ticker + description) | Value (+ return) | Period. Ticker column takes the remaining width. */}
                 <colgroup>
                   <col className="md:w-[70px]" />
-                  <col className="hidden md:table-column" />
+                  <col className="hidden md:table-column xl:w-[300px]" />
                   <col className="hidden md:table-column" style={{ width: 80 }} />
                   <col className="hidden md:table-column" style={{ width: 90 }} />
                   <col className="hidden md:table-column" style={{ width: 90 }} />
                   <col className="w-[110px] md:w-[100px]" />
-                  <col className="hidden md:table-column" style={{ width: 150 }} />
-                  <col style={{ width: 90 }} />
+                  <col className="hidden md:table-column" style={{ width: 165 }} />
+                  <col className="w-[90px] md:w-[110px]" />
                   {hasActions && <col style={{ width: 56 }} />}
                 </colgroup>
                 <thead>
@@ -400,7 +400,7 @@ function SortableAccountRow({
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">Price</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Value</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell" title="All-time gain/loss for manual holdings. Price change since first snapshot for synced holdings.">Return</th>
-                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>
+                    <th style={{ paddingTop: 4, paddingBottom: 4, textAlign: 'right', fontWeight: 500 }} className="pl-2 pr-2 md:pr-4">
                       <PeriodHeader period={period} onCycle={onCyclePeriod} />
                     </th>
                     {hasActions && <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} />}
@@ -447,16 +447,16 @@ function SortableAccountRow({
                           </p>
                         </td>
                         <td style={{ padding: '6px 8px', textAlign: 'right' }} className="hidden md:table-cell">
-                          <span className="font-mono text-xs text-[#e6edf3]">{isCash ? '-' : fmtShares(h.shares)}</span>
+                          <span className="font-mono text-xs md:text-[13px] text-[#e6edf3]">{isCash ? '-' : fmtShares(h.shares)}</span>
                         </td>
                         <td style={{ padding: '6px 8px', textAlign: 'right' }} className="hidden md:table-cell">
-                          <span className="font-mono text-xs text-[#e6edf3]">{isCash ? '-' : fmt(h.avg_cost_basis > 0 ? h.avg_cost_basis : 0)}</span>
+                          <span className="font-mono text-xs md:text-[13px] text-[#e6edf3]">{isCash ? '-' : fmt(h.avg_cost_basis > 0 ? h.avg_cost_basis : 0)}</span>
                         </td>
                         <td style={{ padding: '6px 8px', textAlign: 'right' }} className="hidden md:table-cell">
-                          <span className="font-mono text-xs text-[#e6edf3]">{isCash ? '-' : fmt(livePrice)}</span>
+                          <span className="font-mono text-xs md:text-[13px] text-[#e6edf3]">{isCash ? '-' : fmt(livePrice)}</span>
                         </td>
                         <td style={{ padding: '6px 8px', textAlign: 'right' }}>
-                          <span className="font-mono text-xs text-[#e6edf3]">{fmt(value)}</span>
+                          <span className="font-mono text-xs md:text-[13px] text-[#e6edf3]">{fmt(value)}</span>
                           {!isCash && (
                             <div className="md:hidden">
                               <ReturnCell
@@ -482,7 +482,7 @@ function SortableAccountRow({
                             loading={periodReturnLoading}
                           />
                         </td>
-                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                        <td style={{ paddingTop: 6, paddingBottom: 6, textAlign: 'right' }} className="pl-2 pr-2 md:pr-4">
                           <PeriodChangeCell
                             change={isCash ? null : computePeriodChange(historyMap[h.ticker], period, h.shares)}
                           />

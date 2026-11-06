@@ -10,7 +10,7 @@ function formatShortDate(dateStr) {
 
 export default function ReturnCell({ ticker, avgCostBasis, currentPrice, shares, isSynced, periodReturn, loading }) {
   if (ticker === 'CASH') {
-    return <span style={{ color: '#7d8590', fontFamily: 'monospace', fontSize: 12 }}>--</span>
+    return <span className="text-xs md:text-[13px]" style={{ color: '#7d8590', fontFamily: 'monospace' }}>--</span>
   }
 
   const hasCostBasis = avgCostBasis > 0 && currentPrice > 0 && !isSynced
@@ -20,10 +20,9 @@ export default function ReturnCell({ ticker, avgCostBasis, currentPrice, shares,
     const gainPct = ((currentPrice - avgCostBasis) / avgCostBasis) * 100
     const positive = gainDollar >= 0
     return (
-      <span style={{
+      <span className="text-xs md:text-[13px]" style={{
         color: positive ? '#34d399' : '#f87171',
         fontFamily: 'monospace',
-        fontSize: 12,
       }}>
         {positive ? '+' : ''}{fmt(gainDollar)}{' '}
         ({positive ? '+' : ''}{gainPct.toFixed(2)}%)
@@ -32,18 +31,18 @@ export default function ReturnCell({ ticker, avgCostBasis, currentPrice, shares,
   }
 
   if (loading) {
-    return <span style={{ color: '#7d8590', fontFamily: 'monospace', fontSize: 12 }}>...</span>
+    return <span className="text-xs md:text-[13px]" style={{ color: '#7d8590', fontFamily: 'monospace' }}>...</span>
   }
 
   if (!periodReturn?.hasData) {
-    return <span style={{ color: '#7d8590', fontFamily: 'monospace', fontSize: 12 }}>--</span>
+    return <span className="text-xs md:text-[13px]" style={{ color: '#7d8590', fontFamily: 'monospace' }}>--</span>
   }
 
   const { dollarChange, pricePctChange, startDate } = periodReturn
   const positive = dollarChange >= 0
 
   return (
-    <div style={{ fontFamily: 'monospace', fontSize: 12 }}>
+    <div className="text-xs md:text-[13px]" style={{ fontFamily: 'monospace' }}>
       <span style={{ color: positive ? '#34d399' : '#f87171' }}>
         {positive ? '+' : ''}{fmt(dollarChange)}{' '}
         ({positive ? '+' : ''}{pricePctChange.toFixed(2)}%)

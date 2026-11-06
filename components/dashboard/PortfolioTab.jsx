@@ -779,16 +779,16 @@ export default function PortfolioTab({ onOpenDrawer }) {
                         >
                           {h.account}
                         </td>
-                        <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right hidden md:table-cell">
+                        <td className="px-3 py-2.5 font-mono md:text-[13px] text-[#e6edf3] text-right hidden md:table-cell">
                           {fmtShares(h.shares)}
                         </td>
-                        <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right hidden md:table-cell">
+                        <td className="px-3 py-2.5 font-mono md:text-[13px] text-[#e6edf3] text-right hidden md:table-cell">
                           {h.avgCost > 0 ? fmt(h.avgCost) : '--'}
                         </td>
-                        <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right hidden md:table-cell">
+                        <td className="px-3 py-2.5 font-mono md:text-[13px] text-[#e6edf3] text-right hidden md:table-cell">
                           {h.hasPrice ? fmt(h.livePrice) : '--'}
                         </td>
-                        <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right">
+                        <td className="px-3 py-2.5 font-mono md:text-[13px] text-[#e6edf3] text-right">
                           {h.hasPrice ? fmt(h.value) : '--'}
                           {h.ticker !== 'CASH' && (
                             <div className="md:hidden">
