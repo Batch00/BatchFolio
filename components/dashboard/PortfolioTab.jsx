@@ -8,6 +8,13 @@ import { ChevronUp, ChevronDown } from 'lucide-react'
 import { fmt, fmtShares } from '@/lib/format'
 import AccountTrendChart from '@/components/dashboard/AccountTrendChart'
 import ReturnCell from '@/components/dashboard/ReturnCell'
+import {
+  PERIOD_HISTORY_DAYS,
+  useHoldingsPeriod,
+  computePeriodChange,
+  PeriodHeader,
+  PeriodChangeCell,
+} from '@/components/dashboard/PeriodChange'
 
 const COLORS = [
   '#10b981',
@@ -22,13 +29,13 @@ const COLORS = [
 
 const COLS = [
   { key: 'ticker', label: 'Ticker' },
-  { key: 'account', label: 'Account' },
+  { key: 'account', label: 'Account', hideMobile: true },
   { key: 'shares', label: 'Shares', numeric: true, hideMobile: true },
   { key: 'avgCost', label: 'Avg Cost', numeric: true, hideMobile: true },
-  { key: 'livePrice', label: 'Price', numeric: true },
-  { key: 'ret7d', label: '7D', numeric: true, noSort: true, hideMobile: true },
+  { key: 'livePrice', label: 'Price', numeric: true, hideMobile: true },
   { key: 'value', label: 'Value', numeric: true },
-  { key: 'gainLoss', label: 'Return', numeric: true, noSort: true, tooltip: 'All-time gain/loss for manual holdings. Price change since first snapshot for synced holdings.' },
+  { key: 'gainLoss', label: 'Return', numeric: true, noSort: true, hideMobile: true, tooltip: 'All-time gain/loss for manual holdings. Price change since first snapshot for synced holdings.' },
+  { key: 'period', numeric: true, noSort: true },
 ]
 
 function SortIcon({ dir }) {
@@ -78,6 +85,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
   const [rows, setRows] = useState([])
   const [accounts, setAccounts] = useState([])
   const [historyMap, setHistoryMap] = useState({})
+  const [period, cyclePeriod] = useHoldingsPeriod()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [sortKey, setSortKey] = useState('value')
@@ -256,34 +264,19 @@ export default function PortfolioTab({ onOpenDrawer }) {
     setLoading(false)
 
     if (tickers.length > 0) {
-      const histMap = {}
-      await Promise.all(
-        tickers.map(async (t) => {
-          try {
-            const res = await fetch(`/api/holdings/history?ticker=${encodeURIComponent(t)}&days=7`)
-            const data = await res.json()
-            histMap[t] = data.history || []
-          } catch {
-            histMap[t] = []
-          }
-        }),
-      )
-      setHistoryMap(histMap)
+      try {
+        const res = await fetch(`/api/holdings/history?tickers=${encodeURIComponent(tickers.join(','))}&days=${PERIOD_HISTORY_DAYS}`)
+        const data = await res.json()
+        setHistoryMap(data.histories || {})
+      } catch {
+        setHistoryMap({})
+      }
     }
   }, [])
 
   useEffect(() => {
     loadData()
   }, [loadData])
-
-  function get7DReturn(ticker) {
-    const history = historyMap[ticker] || []
-    if (history.length < 2) return null
-    const oldest = history[0]
-    const latest = history[history.length - 1]
-    if (!oldest.price || oldest.price === 0) return null
-    return ((latest.price - oldest.price) / oldest.price) * 100
-  }
 
   function handleSort(key) {
     if (sortKey === key) {
@@ -703,7 +696,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                       col.noSort ? '' : 'cursor-pointer hover:text-[#e6edf3] select-none'
                     } ${col.numeric ? 'text-right' : 'text-left'} ${col.hideMobile ? 'hidden md:table-cell' : ''}`}
                   >
-                    {col.label}
+                    {col.key === 'period' ? <PeriodHeader period={period} onCycle={cyclePeriod} /> : col.label}
                     {!col.noSort && <SortIcon dir={sortKey === col.key ? sortDir : null} />}
                   </th>
                 ))}
@@ -749,15 +742,17 @@ export default function PortfolioTab({ onOpenDrawer }) {
                           ) : primaryLabel ? (
                             <>
                               <p
-                                className="text-xs text-[#e6edf3] truncate"
+                                className="text-xs text-[#e6edf3] truncate max-w-[130px] md:max-w-[160px]"
                                 title={h.description}
-                                style={{ maxWidth: 160 }}
                               >
                                 {primaryLabel}
                               </p>
                               <span className="font-mono text-[#7d8590]" style={{ fontSize: 10 }}>
                                 {h.ticker}
                               </span>
+                              <p className="md:hidden text-[#7d8590] truncate max-w-[130px]" style={{ fontSize: 10 }}>
+                                {h.account}
+                              </p>
                             </>
                           ) : (
                             <span className="font-mono text-xs text-[#10b981]">{h.ticker}</span>
@@ -778,7 +773,7 @@ export default function PortfolioTab({ onOpenDrawer }) {
                           )}
                         </td>
                         <td
-                          className="px-3 py-2.5 text-[#7d8590] truncate"
+                          className="px-3 py-2.5 text-[#7d8590] truncate hidden md:table-cell"
                           style={{ maxWidth: 140 }}
                           title={h.account}
                         >
@@ -790,32 +785,26 @@ export default function PortfolioTab({ onOpenDrawer }) {
                         <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right hidden md:table-cell">
                           {h.avgCost > 0 ? fmt(h.avgCost) : '--'}
                         </td>
-                        <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right">
+                        <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right hidden md:table-cell">
                           {h.hasPrice ? fmt(h.livePrice) : '--'}
-                        </td>
-                        <td className="px-3 py-2.5 text-right hidden md:table-cell">
-                          {(() => {
-                            const ret7d = get7DReturn(h.ticker)
-                            if (h.ticker === 'CASH' || ret7d === null) {
-                              return <span className="font-mono text-[#7d8590]" style={{ fontSize: 12 }}>--</span>
-                            }
-                            return (
-                              <span
-                                className="font-mono"
-                                style={{
-                                  color: ret7d >= 0 ? '#34d399' : '#f87171',
-                                  fontSize: 12,
-                                }}
-                              >
-                                {ret7d >= 0 ? '+' : ''}{ret7d.toFixed(2)}%
-                              </span>
-                            )
-                          })()}
                         </td>
                         <td className="px-3 py-2.5 font-mono text-[#e6edf3] text-right">
                           {h.hasPrice ? fmt(h.value) : '--'}
+                          {h.ticker !== 'CASH' && (
+                            <div className="md:hidden">
+                              <ReturnCell
+                                ticker={h.ticker}
+                                avgCostBasis={h.avgCost}
+                                currentPrice={h.livePrice}
+                                shares={h.shares}
+                                isSynced={h.is_synced}
+                                periodReturn={periodReturns[h.ticker]}
+                                loading={periodReturnLoading}
+                              />
+                            </div>
+                          )}
                         </td>
-                        <td className="px-3 py-2.5 text-right">
+                        <td className="px-3 py-2.5 text-right hidden md:table-cell">
                           <ReturnCell
                             ticker={h.ticker}
                             avgCostBasis={h.avgCost}
@@ -824,6 +813,11 @@ export default function PortfolioTab({ onOpenDrawer }) {
                             isSynced={h.is_synced}
                             periodReturn={periodReturns[h.ticker]}
                             loading={periodReturnLoading}
+                          />
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <PeriodChangeCell
+                            change={h.ticker === 'CASH' ? null : computePeriodChange(historyMap[h.ticker], period, h.shares)}
                           />
                         </td>
                       </tr>
@@ -838,20 +832,24 @@ export default function PortfolioTab({ onOpenDrawer }) {
                           <td className="px-3 py-2.5 font-mono text-xs font-semibold text-[#7d8590] uppercase tracking-wider">
                             TOTAL
                           </td>
-                          <td className="px-3 py-2.5" />
                           <td className="px-3 py-2.5 hidden md:table-cell" />
                           <td className="px-3 py-2.5 hidden md:table-cell" />
-                          <td className="px-3 py-2.5" />
+                          <td className="px-3 py-2.5 hidden md:table-cell" />
                           <td className="px-3 py-2.5 hidden md:table-cell" />
                           <td className="px-3 py-2.5 font-mono text-sm font-semibold text-[#e6edf3] text-right">
                             {fmt(totalValue)}
+                            <div className={`md:hidden ${totalPositive ? 'text-[#34d399]' : 'text-[#f87171]'}`}>
+                              {totalPositive ? '+' : ''}
+                              {fmt(totalGainLoss)}
+                            </div>
                           </td>
                           <td
-                            className={`px-3 py-2.5 font-mono text-sm font-semibold text-right ${totalPositive ? 'text-[#34d399]' : 'text-[#f87171]'}`}
+                            className={`px-3 py-2.5 font-mono text-sm font-semibold text-right hidden md:table-cell ${totalPositive ? 'text-[#34d399]' : 'text-[#f87171]'}`}
                           >
                             {totalPositive ? '+' : ''}
                             {fmt(totalGainLoss)}
                           </td>
+                          <td className="px-3 py-2.5" />
                         </tr>
                       )
                     })()}

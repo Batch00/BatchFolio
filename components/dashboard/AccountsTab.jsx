@@ -33,6 +33,13 @@ import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrate
 import { CSS } from '@dnd-kit/utilities'
 import { fmt, fmtShares } from '@/lib/format'
 import ReturnCell from '@/components/dashboard/ReturnCell'
+import {
+  PERIOD_HISTORY_DAYS,
+  useHoldingsPeriod,
+  computePeriodChange,
+  PeriodHeader,
+  PeriodChangeCell,
+} from '@/components/dashboard/PeriodChange'
 
 const TICKER_REGEX = /^[A-Z0-9.\-]{1,10}$/
 
@@ -164,7 +171,7 @@ function AccountReturnBanner({ accountId }) {
 function SortableAccountRow({
   acc, holdings, prices, expanded, toggleExpand, accountTotal, fmtBalanceDate,
   openEditAccount, deleteAccount, toggleExclude, openAddHolding, openEditHolding,
-  deleteHolding, onOpenDrawer, isDemo, isDuplicate, historyMap,
+  deleteHolding, onOpenDrawer, isDemo, isDuplicate, historyMap, period, onCyclePeriod,
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: acc.id })
   const style = {
@@ -199,15 +206,8 @@ function SortableAccountRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isExpanded, holdListKey])
 
-  function get7DReturn(ticker) {
-    if (ticker === 'CASH') return null
-    const history = historyMap[ticker]
-    if (!history || history.length < 2) return null
-    const oldest = history[0]
-    const latest = history[history.length - 1]
-    if (!oldest.price || oldest.price === 0) return null
-    return ((latest.price - oldest.price) / oldest.price) * 100
-  }
+  // Synced holdings have no edit/delete buttons, so drop the empty column when nothing is editable
+  const hasActions = holdList.some((h) => !h.is_synced)
 
   return (
     <div
@@ -376,28 +376,34 @@ function SortableAccountRow({
           ) : (
             <div className="overflow-x-auto">
               <table style={{ tableLayout: 'fixed', width: '100%', borderCollapse: 'collapse' }}>
+                {/* On phones: Holding (ticker + description) | Value (+ return) | Period. Ticker column takes the remaining width. */}
                 <colgroup>
-                  <col style={{ width: 70 }} />
-                  <col style={{ minWidth: 220 }} />
+                  <col className="md:w-[70px]" />
+                  <col className="hidden md:table-column" />
                   <col className="hidden md:table-column" style={{ width: 80 }} />
                   <col className="hidden md:table-column" style={{ width: 90 }} />
+                  <col className="hidden md:table-column" style={{ width: 90 }} />
+                  <col className="w-[110px] md:w-[100px]" />
+                  <col className="hidden md:table-column" style={{ width: 150 }} />
                   <col style={{ width: 90 }} />
-                  <col style={{ width: 100 }} />
-                  <col style={{ width: 130 }} />
-                  <col className="hidden md:table-column" style={{ width: 70 }} />
-                  <col style={{ width: 56 }} />
+                  {hasActions && <col style={{ width: 56 }} />}
                 </colgroup>
                 <thead>
                   <tr style={{ fontSize: 10, color: '#7d8590', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    <th style={{ padding: '4px 8px', textAlign: 'left', fontWeight: 500 }}>Ticker</th>
-                    <th style={{ padding: '4px 8px', textAlign: 'left', fontWeight: 500 }}>Description</th>
+                    <th style={{ padding: '4px 8px', textAlign: 'left', fontWeight: 500 }}>
+                      <span className="md:hidden">Holding</span>
+                      <span className="hidden md:inline">Ticker</span>
+                    </th>
+                    <th style={{ padding: '4px 8px', textAlign: 'left', fontWeight: 500 }} className="hidden md:table-cell">Description</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">Shares</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">Avg Cost</th>
-                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Price</th>
+                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">Price</th>
                     <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>Value</th>
-                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} title="All-time gain/loss for manual holdings. Price change since first snapshot for synced holdings.">Return</th>
-                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell">7D</th>
-                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} />
+                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} className="hidden md:table-cell" title="All-time gain/loss for manual holdings. Price change since first snapshot for synced holdings.">Return</th>
+                    <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }}>
+                      <PeriodHeader period={period} onCycle={onCyclePeriod} />
+                    </th>
+                    {hasActions && <th style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 500 }} />}
                   </tr>
                 </thead>
                 <tbody>
@@ -424,8 +430,15 @@ function SortableAccountRow({
                               <RefreshCw style={{ width: 9, height: 9, color: 'rgba(16,185,129,0.5)', flexShrink: 0 }} />
                             )}
                           </div>
+                          <p
+                            className="md:hidden"
+                            style={{ fontSize: 11, color: '#7d8590', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            title={desc}
+                          >
+                            {desc}
+                          </p>
                         </td>
-                        <td style={{ padding: '6px 8px', overflow: 'hidden' }}>
+                        <td style={{ padding: '6px 8px', overflow: 'hidden' }} className="hidden md:table-cell">
                           <p
                             style={{ fontSize: 11, color: '#7d8590', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                             title={h.description || h.ticker}
@@ -439,13 +452,26 @@ function SortableAccountRow({
                         <td style={{ padding: '6px 8px', textAlign: 'right' }} className="hidden md:table-cell">
                           <span className="font-mono text-xs text-[#e6edf3]">{isCash ? '-' : fmt(h.avg_cost_basis > 0 ? h.avg_cost_basis : 0)}</span>
                         </td>
-                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                        <td style={{ padding: '6px 8px', textAlign: 'right' }} className="hidden md:table-cell">
                           <span className="font-mono text-xs text-[#e6edf3]">{isCash ? '-' : fmt(livePrice)}</span>
                         </td>
                         <td style={{ padding: '6px 8px', textAlign: 'right' }}>
                           <span className="font-mono text-xs text-[#e6edf3]">{fmt(value)}</span>
+                          {!isCash && (
+                            <div className="md:hidden">
+                              <ReturnCell
+                                ticker={h.ticker}
+                                avgCostBasis={h.avg_cost_basis}
+                                currentPrice={livePrice}
+                                shares={h.shares}
+                                isSynced={h.is_synced}
+                                periodReturn={holdingPeriodReturns[h.ticker]}
+                                loading={periodReturnLoading}
+                              />
+                            </div>
+                          )}
                         </td>
-                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                        <td style={{ padding: '6px 8px', textAlign: 'right' }} className="hidden md:table-cell">
                           <ReturnCell
                             ticker={h.ticker}
                             avgCostBasis={h.avg_cost_basis}
@@ -456,19 +482,12 @@ function SortableAccountRow({
                             loading={periodReturnLoading}
                           />
                         </td>
-                        <td style={{ padding: '6px 8px', textAlign: 'right' }} className="hidden md:table-cell">
-                          {(() => {
-                            const ret = get7DReturn(h.ticker)
-                            if (ret === null) return <span className="font-mono text-xs text-[#7d8590]">--</span>
-                            const pos = ret >= 0
-                            return (
-                              <span className={`font-mono text-xs ${pos ? 'text-[#34d399]' : 'text-[#f87171]'}`}>
-                                {pos ? '+' : ''}{ret.toFixed(2)}%
-                              </span>
-                            )
-                          })()}
-                        </td>
                         <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                          <PeriodChangeCell
+                            change={isCash ? null : computePeriodChange(historyMap[h.ticker], period, h.shares)}
+                          />
+                        </td>
+                        {hasActions && <td style={{ padding: '6px 8px', textAlign: 'right' }}>
                           <div className="flex items-center justify-end">
                             {!h.is_synced && (
                               <button
@@ -489,7 +508,7 @@ function SortableAccountRow({
                               </button>
                             )}
                           </div>
-                        </td>
+                        </td>}
                       </tr>
                     )
                   })}
@@ -572,8 +591,9 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
   const [editLiabError, setEditLiabError] = useState(null)
   const [editLiabIsSynced, setEditLiabIsSynced] = useState(false)
 
-  // 7D return history
+  // Snapshot price history for the period column (1D to YTD)
   const [historyMap, setHistoryMap] = useState({})
+  const [period, cyclePeriod] = useHoldingsPeriod()
 
   // Toast state
   const [toast, setToast] = useState(null)
@@ -658,7 +678,7 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
     loadData()
   }, [loadData])
 
-  // Fetch 7D history for tickers in expanded accounts
+  // Fetch snapshot history for tickers in expanded accounts
   useEffect(() => {
     const expandedIds = Object.keys(expanded).filter((id) => expanded[id])
     if (expandedIds.length === 0) return
@@ -669,20 +689,18 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
       }
     }
     if (tickers.size === 0) return
-    Promise.all(
-      [...tickers].map((t) =>
-        fetch(`/api/holdings/history?ticker=${encodeURIComponent(t)}&days=7`)
-          .then((r) => r.json())
-          .then((d) => ({ t, history: d.history ?? [] }))
-          .catch(() => ({ t, history: [] }))
-      )
-    ).then((results) => {
-      setHistoryMap((prev) => {
-        const next = { ...prev }
-        for (const { t, history } of results) next[t] = history
-        return next
+    const list = [...tickers]
+    fetch(`/api/holdings/history?tickers=${encodeURIComponent(list.join(','))}&days=${PERIOD_HISTORY_DAYS}`)
+      .then((r) => r.json())
+      .then((d) => d.histories ?? {})
+      .catch(() => ({}))
+      .then((histories) => {
+        setHistoryMap((prev) => {
+          const next = { ...prev }
+          for (const t of list) next[t] = histories[t] ?? []
+          return next
+        })
       })
-    })
   }, [expanded, holdings])
 
   function accountTotal(acc) {
@@ -1060,6 +1078,8 @@ export default function AccountsTab({ onOpenDrawer, isDemo, onDemoBlock }) {
                     isDemo={isDemo}
                     isDuplicate={!acc.is_synced && duplicateProviders.has(acc.provider)}
                     historyMap={historyMap}
+                    period={period}
+                    onCyclePeriod={cyclePeriod}
                   />
                 ))}
               </div>
