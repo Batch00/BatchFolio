@@ -184,7 +184,7 @@ The Access URL is never exposed to the client. All SimpleFIN requests go through
 
 ### nightly-snapshot
 
-Runs at 6AM UTC (midnight CST) via pg_cron.
+Runs at 23:00 UTC via pg_cron. Requests must send an `x-cron-secret` header matching `CRON_SECRET`.
 
 1. Syncs SimpleFIN for all connected users
 2. Fetches live prices from Finnhub for manual holdings
@@ -194,12 +194,12 @@ Runs at 6AM UTC (midnight CST) via pg_cron.
 
 | | |
 |---|---|
-| **Schedule** | `0 6 * * *` (6AM UTC) |
-| **Required secrets** | `FINNHUB_API_KEY`, `APP_SUPABASE_URL`, `SERVICE_ROLE_KEY`, `DEMO_USER_ID` |
+| **Schedule** | `0 23 * * *` (23:00 UTC) |
+| **Required secrets** | `FINNHUB_API_KEY`, `APP_SUPABASE_URL`, `SERVICE_ROLE_KEY`, `CRON_SECRET`, `DEMO_USER_ID` |
 
 ### reset-demo
 
-Resets demo user data nightly. Currently unscheduled -- demo writes are blocked at the component level.
+Resets demo user data. Not scheduled; demo writes are blocked at the component level. Requests must send an `x-cron-secret` header matching `CRON_SECRET`.
 
 ### Deploy
 
@@ -213,10 +213,11 @@ Set secrets in **Supabase dashboard > Edge Functions > Secrets**:
 FINNHUB_API_KEY=your_finnhub_key
 APP_SUPABASE_URL=https://your-project.supabase.co
 SERVICE_ROLE_KEY=your_service_role_key
+CRON_SECRET=long_random_value
 DEMO_USER_ID=uuid-of-demo-user
 ```
 
-Schedule `nightly-snapshot` in **Supabase dashboard > Edge Functions > select function > Schedule**: `0 6 * * *`
+`nightly-snapshot` is scheduled by a pg_cron job (`0 23 * * *`) that sends both its `Authorization` header and an `x-cron-secret` header.
 
 ---
 

@@ -1,9 +1,9 @@
 // Deploy with:
 // supabase functions deploy nightly-snapshot
-// Schedule nightly at 23:00 UTC in Supabase dashboard >
-// Edge Functions > nightly-snapshot > Schedule (cron: 0 23 * * *)
+// Runs nightly at 23:00 UTC from a pg_cron job (cron: 0 23 * * *).
+// The job must send an x-cron-secret header matching CRON_SECRET.
 // Required secrets: FINNHUB_API_KEY, APP_SUPABASE_URL,
-// SERVICE_ROLE_KEY, DEMO_USER_ID (optional - skips demo user)
+// SERVICE_ROLE_KEY, CRON_SECRET, DEMO_USER_ID (optional - skips demo user)
 //
 // Required SQL migrations (run in Supabase SQL editor before deploying):
 // alter table batchfolio.accounts add column if not exists is_excluded boolean default false;
@@ -462,7 +462,32 @@ async function syncSimpleFINForUser(
   }
 }
 
-Deno.serve(async () => {
+// Constant-time check of the x-cron-secret header against CRON_SECRET.
+// Both values are hashed first so the comparison does not leak their lengths.
+async function hasValidCronSecret(req: Request): Promise<boolean> {
+  const secret = Deno.env.get('CRON_SECRET')
+  const provided = req.headers.get('x-cron-secret')
+  if (!secret || !provided) return false
+  const enc = new TextEncoder()
+  const [a, b] = await Promise.all([
+    crypto.subtle.digest('SHA-256', enc.encode(secret)),
+    crypto.subtle.digest('SHA-256', enc.encode(provided)),
+  ])
+  const x = new Uint8Array(a)
+  const y = new Uint8Array(b)
+  let diff = 0
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i]
+  return diff === 0
+}
+
+Deno.serve(async (req) => {
+  if (!(await hasValidCronSecret(req))) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
   const supabase = createClient(
     Deno.env.get('APP_SUPABASE_URL')!,
     Deno.env.get('SERVICE_ROLE_KEY')!,

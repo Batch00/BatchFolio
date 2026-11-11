@@ -1,14 +1,38 @@
 // Deploy with:
 // supabase functions deploy reset-demo
-// Schedule nightly at 3AM UTC in Supabase dashboard >
-// Edge Functions > reset-demo > Schedule (cron: 0 3 * * *)
-// Required secrets: APP_SUPABASE_URL, SERVICE_ROLE_KEY
+// Not scheduled. Invoke manually with an x-cron-secret header matching CRON_SECRET.
+// Required secrets: APP_SUPABASE_URL, SERVICE_ROLE_KEY, CRON_SECRET
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const DEMO_EMAIL = 'demo@batchfolio.app'
 
-Deno.serve(async () => {
+// Constant-time check of the x-cron-secret header against CRON_SECRET.
+// Both values are hashed first so the comparison does not leak their lengths.
+async function hasValidCronSecret(req: Request): Promise<boolean> {
+  const secret = Deno.env.get('CRON_SECRET')
+  const provided = req.headers.get('x-cron-secret')
+  if (!secret || !provided) return false
+  const enc = new TextEncoder()
+  const [a, b] = await Promise.all([
+    crypto.subtle.digest('SHA-256', enc.encode(secret)),
+    crypto.subtle.digest('SHA-256', enc.encode(provided)),
+  ])
+  const x = new Uint8Array(a)
+  const y = new Uint8Array(b)
+  let diff = 0
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i]
+  return diff === 0
+}
+
+Deno.serve(async (req) => {
+  if (!(await hasValidCronSecret(req))) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
   const supabase = createClient(
     Deno.env.get('APP_SUPABASE_URL')!,
     Deno.env.get('SERVICE_ROLE_KEY')!,
