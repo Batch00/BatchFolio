@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
-import { chartDomain, dollarTickFormatter } from '@/lib/chartDomain'
+import { chartDomain, chartTicks, dollarTickFormatter } from '@/lib/chartDomain'
 
 function formatMonth(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short' })
@@ -44,6 +44,7 @@ export default function TrendChart({ loading, snapshots, range }) {
   const filtered = snapshots.slice(-days)
   const chartData = filtered.map((s) => ({ date: s.date, netWorth: s.net_worth }))
   const yDomain = chartDomain(chartData.map((d) => d.netWorth))
+  const yTicks = chartTicks(yDomain)
 
   return (
     <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4 h-full flex flex-col">
@@ -82,7 +83,8 @@ export default function TrendChart({ loading, snapshots, range }) {
             />
             <YAxis
               domain={yDomain}
-              tickFormatter={dollarTickFormatter(yDomain)}
+              ticks={yTicks.ticks}
+              tickFormatter={dollarTickFormatter(yTicks)}
               tick={{ fill: '#7d8590', fontSize: 10 }}
               axisLine={false}
               tickLine={false}
