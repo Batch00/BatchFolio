@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
+import { chartDomain } from '@/lib/chartDomain'
 
 function formatMonth(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short' })
@@ -85,6 +86,7 @@ export default function TrendChart({ loading, snapshots, range }) {
               minTickGap={40}
             />
             <YAxis
+              domain={chartDomain(chartData.map((d) => d.netWorth))}
               tickFormatter={formatYAxis}
               tick={{ fill: '#7d8590', fontSize: 10 }}
               axisLine={false}

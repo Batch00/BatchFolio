@@ -12,6 +12,7 @@ import {
 } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
 import { fmt } from '@/lib/format'
+import { chartDomain } from '@/lib/chartDomain'
 
 const formatDate = (dateStr) => {
   try {
@@ -178,9 +179,9 @@ export default function AccountTrendChart({ accountId, accountName, currentValue
 
       {/* Chart */}
       {loading ? (
-        <Skeleton className="h-[120px]" />
+        <Skeleton className="h-[220px]" />
       ) : trend.length === 0 ? (
-        <div className="flex items-center justify-center" style={{ height: 120 }}>
+        <div className="flex items-center justify-center" style={{ height: 220 }}>
           <p className="text-center" style={{ fontSize: 11, color: '#7d8590' }}>
             Building history - check back after a few nightly syncs
           </p>
@@ -192,7 +193,7 @@ export default function AccountTrendChart({ accountId, accountName, currentValue
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            height: 120,
+            height: 220,
             gap: 4,
           }}
         >
@@ -200,7 +201,7 @@ export default function AccountTrendChart({ accountId, accountName, currentValue
           <p style={{ fontSize: 11, color: '#7d8590' }}>First data point recorded</p>
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={120}>
+        <ResponsiveContainer width="100%" height={220}>
           <AreaChart data={trend} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
             <defs>
               <linearGradient id="acctTrendGrad" x1="0" y1="0" x2="0" y2="1">
@@ -216,6 +217,7 @@ export default function AccountTrendChart({ accountId, accountName, currentValue
             />
             <YAxis
               hide
+              domain={chartDomain(trend.map((t) => t.total))}
             />
             <ReferenceLine
               y={trend[0]?.total}
