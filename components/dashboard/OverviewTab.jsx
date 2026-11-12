@@ -29,7 +29,8 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
     setError(null)
 
     const [snapshotsRes, holdingsRes, watchlistRes, liabRes, accountsRes] = await Promise.all([
-      supabase.from('net_worth_snapshots').select('*').order('date', { ascending: true }).limit(500),
+      // Newest 500 first, reversed below so the chart reads oldest to newest
+      supabase.from('net_worth_snapshots').select('*').order('date', { ascending: false }).limit(500),
       supabase.from('holdings').select('*').limit(500),
       supabase.from('watchlist').select('*').order('added_at', { ascending: false }).limit(500),
       supabase.from('liabilities').select('balance'),
@@ -104,7 +105,7 @@ export default function OverviewTab({ onOpenDrawer, onDataLoaded }) {
       h.ticker === 'CASH' ? { ...h, _accountName: accountNameMap[h.account_id] ?? '' } : h
     )
 
-    setSnapshots(snapshotsRes.data ?? [])
+    setSnapshots((snapshotsRes.data ?? []).reverse())
     setHoldings(annotatedHoldings)
     setPrices(priceMap)
     setWatchlist(wlItems)

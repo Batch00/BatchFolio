@@ -42,6 +42,8 @@ const DATE_RANGES = [
   { id: '90d', label: 'Last 90 days', days: 90 },
 ]
 
+const TX_PAGE_SIZE = 1000
+
 export default function TransactionsTab() {
   const supabase = createClient()
 
@@ -89,20 +91,28 @@ export default function TransactionsTab() {
         .select('id, name, simplefin_id')
         .eq('user_id', user.id)
         .not('simplefin_id', 'is', null),
-      (() => {
-        let q = supabase
-          .from('transactions')
-          .select('*, accounts(name), liabilities(name)')
-          .eq('user_id', user.id)
-          .gte('posted_at', fromDate.toISOString())
-          .order('posted_at', { ascending: false })
-          .limit(2000)
-        if (liabilityId) {
-          q = q.eq('liability_id', liabilityId)
-        } else if (selectedAccount !== 'all') {
-          q = q.eq('account_id', selectedAccount)
+      (async () => {
+        // Page through results: a single request is capped by the API max rows setting
+        const rows = []
+        for (let offset = 0; ; offset += TX_PAGE_SIZE) {
+          let q = supabase
+            .from('transactions')
+            .select('*, accounts(name), liabilities(name)')
+            .eq('user_id', user.id)
+            .gte('posted_at', fromDate.toISOString())
+            .order('posted_at', { ascending: false })
+            .order('id', { ascending: false })
+            .range(offset, offset + TX_PAGE_SIZE - 1)
+          if (liabilityId) {
+            q = q.eq('liability_id', liabilityId)
+          } else if (selectedAccount !== 'all') {
+            q = q.eq('account_id', selectedAccount)
+          }
+          const { data, error } = await q
+          if (error) return { data: null, error }
+          rows.push(...(data ?? []))
+          if (!data || data.length < TX_PAGE_SIZE) return { data: rows, error: null }
         }
-        return q
       })(),
     ])
 
