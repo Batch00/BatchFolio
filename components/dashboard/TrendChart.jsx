@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
-import { chartDomain } from '@/lib/chartDomain'
+import { chartDomain, dollarTickFormatter } from '@/lib/chartDomain'
 
 function formatMonth(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short' })
@@ -22,12 +22,6 @@ function formatDateFull(dateStr) {
     day: 'numeric',
     year: 'numeric',
   })
-}
-
-function formatYAxis(value) {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`
-  if (value >= 1_000) return `$${Math.round(value / 1_000)}k`
-  return `$${value}`
 }
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -49,6 +43,7 @@ export default function TrendChart({ loading, snapshots, range }) {
     range === 'today' || range === '30d' ? 30 : range === '90d' ? 90 : 365
   const filtered = snapshots.slice(-days)
   const chartData = filtered.map((s) => ({ date: s.date, netWorth: s.net_worth }))
+  const yDomain = chartDomain(chartData.map((d) => d.netWorth))
 
   return (
     <div className="bg-[#161b22] border border-[#21262d] rounded-md p-4 h-full flex flex-col">
@@ -86,8 +81,8 @@ export default function TrendChart({ loading, snapshots, range }) {
               minTickGap={40}
             />
             <YAxis
-              domain={chartDomain(chartData.map((d) => d.netWorth))}
-              tickFormatter={formatYAxis}
+              domain={yDomain}
+              tickFormatter={dollarTickFormatter(yDomain)}
               tick={{ fill: '#7d8590', fontSize: 10 }}
               axisLine={false}
               tickLine={false}
