@@ -50,11 +50,11 @@ export async function POST(request) {
     }
     const accessUrl = (await claimRes.text()).trim()
 
-    if (!accessUrl.startsWith('http')) {
+    if (!accessUrl.startsWith('https://')) {
       throw new Error('Invalid access URL returned from SimpleFIN')
     }
 
-    // Use service role to write — bypasses RLS
+    // Use service role to write, bypasses RLS
     const supabaseService = createServiceClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.SERVICE_ROLE_KEY,
