@@ -15,25 +15,14 @@ export async function POST(request) {
     const allowedHosts = ['bridge.simplefin.org', 'beta-bridge.simplefin.org']
     try {
       const parsed = new URL(claimUrl)
-      if (!allowedHosts.includes(parsed.host)) {
+      if (parsed.protocol !== 'https:' || !allowedHosts.includes(parsed.host)) {
         return Response.json({ error: 'Invalid setup token' }, { status: 400 })
       }
     } catch {
       return Response.json({ error: 'Invalid setup token format' }, { status: 400 })
     }
 
-    // POST to claim URL to exchange for access URL (one-time use)
-    const claimRes = await fetch(claimUrl, { method: 'POST' })
-    if (!claimRes.ok) {
-      throw new Error(`Failed to claim setup token: ${claimRes.status}`)
-    }
-    const accessUrl = (await claimRes.text()).trim()
-
-    if (!accessUrl.startsWith('http')) {
-      throw new Error('Invalid access URL returned from SimpleFIN')
-    }
-
-    // Get current user from session
+    // Get current user from session before claiming, so an expired session cannot spend the token
     const cookieStore = await cookies()
     const supabaseAuth = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -52,6 +41,17 @@ export async function POST(request) {
     const { data: { user }, error: authErr } = await supabaseAuth.auth.getUser()
     if (authErr || !user) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // POST to claim URL to exchange for access URL (one-time use)
+    const claimRes = await fetch(claimUrl, { method: 'POST' })
+    if (!claimRes.ok) {
+      throw new Error(`Failed to claim setup token: ${claimRes.status}`)
+    }
+    const accessUrl = (await claimRes.text()).trim()
+
+    if (!accessUrl.startsWith('http')) {
+      throw new Error('Invalid access URL returned from SimpleFIN')
     }
 
     // Use service role to write — bypasses RLS
