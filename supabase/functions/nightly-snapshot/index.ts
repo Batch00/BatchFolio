@@ -139,7 +139,9 @@ async function lookupSecurityMetadata(run: Run, ticker: string, finnhubKey: stri
       console.error('Security metadata rate limited, retrying next run:', ticker)
       return { kind: 'rateLimited' }
     }
-    console.error('Security metadata error, not retrying until the TTL passes:', ticker, (err as Error).message)
+    // Never log the error message: a network error's message includes the URL with the token
+    const status = (err as any).status
+    console.error('Security metadata error, not retrying until the TTL passes:', ticker, status ? `HTTP ${status}` : 'network error')
     return { kind: 'failed' }
   }
 }
