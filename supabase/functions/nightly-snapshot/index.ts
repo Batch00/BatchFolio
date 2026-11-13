@@ -38,6 +38,19 @@ function isCreditCardAccount(name: string, balance?: string): boolean {
   )
 }
 
+const SIMPLEFIN_HOSTS = ['bridge.simplefin.org', 'beta-bridge.simplefin.org']
+
+// Mirrors isSimplefinUrl in lib/simplefin.js - keep in sync.
+// True only for an https URL on a SimpleFIN Bridge host.
+function isSimplefinUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && SIMPLEFIN_HOSTS.includes(url.host)
+  } catch {
+    return false
+  }
+}
+
 const TICKER_REGEX = /^[A-Z0-9.\-]{1,10}$/
 const METADATA_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -105,6 +118,12 @@ async function syncSimpleFINForUser(
     .maybeSingle()
 
   if (!conn?.access_url) return
+
+  // Refuse to send credentials anywhere but a SimpleFIN host. Never log the URL itself.
+  if (!isSimplefinUrl(conn.access_url)) {
+    console.error('[nightly] Stored SimpleFIN URL failed the host check, skipping sync for', uid)
+    return
+  }
 
   try {
     const url = new URL(conn.access_url)

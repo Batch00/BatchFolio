@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { isSimplefinUrl } from '@/lib/simplefin'
 
 export async function POST(request) {
   try {
@@ -12,14 +13,8 @@ export async function POST(request) {
     // Decode base64 setup token to get claim URL
     const claimUrl = Buffer.from(setupToken.trim(), 'base64').toString('utf-8').trim()
 
-    const allowedHosts = ['bridge.simplefin.org', 'beta-bridge.simplefin.org']
-    try {
-      const parsed = new URL(claimUrl)
-      if (parsed.protocol !== 'https:' || !allowedHosts.includes(parsed.host)) {
-        return Response.json({ error: 'Invalid setup token' }, { status: 400 })
-      }
-    } catch {
-      return Response.json({ error: 'Invalid setup token format' }, { status: 400 })
+    if (!isSimplefinUrl(claimUrl)) {
+      return Response.json({ error: 'Invalid setup token' }, { status: 400 })
     }
 
     // Get current user from session before claiming, so an expired session cannot spend the token
@@ -50,7 +45,7 @@ export async function POST(request) {
     }
     const accessUrl = (await claimRes.text()).trim()
 
-    if (!accessUrl.startsWith('https://')) {
+    if (!isSimplefinUrl(accessUrl)) {
       throw new Error('Invalid access URL returned from SimpleFIN')
     }
 

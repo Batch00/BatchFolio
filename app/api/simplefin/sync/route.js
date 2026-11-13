@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolveHoldingMetadata } from '@/lib/security-metadata'
+import { isSimplefinUrl } from '@/lib/simplefin'
 
 // Required SQL migrations (run in Supabase SQL editor):
 // ALTER TABLE batchfolio.accounts DROP CONSTRAINT IF EXISTS accounts_type_check;
@@ -97,6 +98,11 @@ export async function POST() {
           message: 'Already synced recently. SimpleFIN updates once per day.'
         })
       }
+    }
+
+    // Refuse to send credentials anywhere but a SimpleFIN host
+    if (!isSimplefinUrl(conn.access_url)) {
+      return Response.json({ error: 'Invalid SimpleFIN connection' }, { status: 400 })
     }
 
     // Parse access URL for credentials
