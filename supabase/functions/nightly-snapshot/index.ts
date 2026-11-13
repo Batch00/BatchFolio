@@ -53,14 +53,45 @@ function isSimplefinUrl(value: string): boolean {
 
 const TICKER_REGEX = /^[A-Z0-9.\-]{1,10}$/
 const METADATA_TTL_MS = 7 * 24 * 60 * 60 * 1000
-const FINNHUB_SPACING_MS = 250
+const FINNHUB_SPACING_MS = 1000
+const METADATA_REFRESH_BUDGET = 20
 let finnhubQueue: Promise<void> = Promise.resolve()
 let lastFinnhubStart = 0
+
+type SecurityMeta = { name: string | null; searchName: string | null; type: string | null }
+type MetaLookup =
+  | { kind: 'ok'; meta: SecurityMeta | null }
+  | { kind: 'rateLimited' }
+  | { kind: 'failed' }
+
+// State for one invocation. The caches make each ticker's quote and metadata lookup
+// happen at most once per run, shared across users and accounts.
+type Run = {
+  quotes: Map<string, Promise<number | null>>
+  metadata: Map<string, Promise<MetaLookup>>
+  metadataRefreshesLeft: number
+  metadataDeferred: Set<string>
+  finnhubCalls: number
+  finnhub429s: number
+  quoteFallbacks: number
+}
+
+function newRun(): Run {
+  return {
+    quotes: new Map(),
+    metadata: new Map(),
+    metadataRefreshesLeft: METADATA_REFRESH_BUDGET,
+    metadataDeferred: new Set(),
+    finnhubCalls: 0,
+    finnhub429s: 0,
+    quoteFallbacks: 0,
+  }
+}
 
 // Every Finnhub call in this function goes through here. Calls wait their turn in a queue
 // and start at least FINNHUB_SPACING_MS after the previous call started, parallel callers too.
 // Throws on a non-2xx response with the HTTP status on err.status.
-async function finnhubFetch(path: string, finnhubKey: string): Promise<any> {
+async function finnhubFetch(run: Run, path: string, finnhubKey: string): Promise<any> {
   const turn = finnhubQueue.then(async () => {
     const wait = lastFinnhubStart + FINNHUB_SPACING_MS - Date.now()
     if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait))
@@ -68,16 +99,58 @@ async function finnhubFetch(path: string, finnhubKey: string): Promise<any> {
   })
   finnhubQueue = turn
   await turn
+  run.finnhubCalls++
   const res = await fetch(`https://finnhub.io/api/v1${path}&token=${finnhubKey}`)
+  if (res.status === 429) run.finnhub429s++
   if (!res.ok) throw Object.assign(new Error(`Finnhub error ${res.status}`), { status: res.status })
   return res.json()
 }
 
-// Mirrors resolveHoldingMetadata in lib/security-metadata.js - keep in sync.
+// One quote per ticker per run. Resolves to null when the quote failed or came back empty
+// (Finnhub returns c = 0 for symbols it does not know).
+function getQuote(run: Run, ticker: string, finnhubKey: string): Promise<number | null> {
+  let quote = run.quotes.get(ticker)
+  if (!quote) {
+    quote = TICKER_REGEX.test(ticker)
+      ? finnhubFetch(run, `/quote?symbol=${ticker}`, finnhubKey)
+        .then((data) => (typeof data.c === 'number' && data.c > 0 ? data.c : null))
+        .catch(() => null)
+      : Promise.resolve(null)
+    run.quotes.set(ticker, quote)
+  }
+  return quote
+}
+
+// One metadata refresh: search, plus profile2 when the search matched.
+async function lookupSecurityMetadata(run: Run, ticker: string, finnhubKey: string): Promise<MetaLookup> {
+  try {
+    const search = await finnhubFetch(run, `/search?q=${ticker}`, finnhubKey)
+    const match = (search.result || []).find((r: any) => r.symbol === ticker)
+    if (!match) return { kind: 'ok', meta: null }
+    // profile2 is empty for ETFs and 403s for some symbols; fall back to other names.
+    // A 429 is rethrown so the whole lookup is retried next run.
+    const profile = await finnhubFetch(run, `/stock/profile2?symbol=${ticker}`, finnhubKey).catch((err) => {
+      if (err.status === 429) throw err
+      return {}
+    })
+    return { kind: 'ok', meta: { name: profile.name || null, searchName: match.description || null, type: match.type || null } }
+  } catch (err) {
+    if ((err as any).status === 429) {
+      console.error('Security metadata rate limited, retrying next run:', ticker)
+      return { kind: 'rateLimited' }
+    }
+    console.error('Security metadata error, not retrying until the TTL passes:', ticker, (err as Error).message)
+    return { kind: 'failed' }
+  }
+}
+
+// Mirrors resolveHoldingMetadata in lib/security-metadata.js - keep in sync. The per-run
+// cache and the METADATA_REFRESH_BUDGET are specific to this function.
 // Re-pulls name and security type from Finnhub when the holding is new, its ticker or
 // SimpleFIN name changed, or the cache is older than METADATA_TTL_MS. Otherwise keeps the
 // cached values so a stale broker description (e.g. a reassigned ticker) cannot overwrite them.
 async function resolveHoldingMetadata(
+  run: Run,
   existing: any,
   ticker: string,
   providerDescription: string | undefined,
@@ -96,41 +169,42 @@ async function resolveHoldingMetadata(
     return { description: existing.description, provider_description: providerDesc }
   }
 
-  try {
-    let meta: { name: string | null; searchName: string | null; type: string | null } | null = null
-    if (ticker && ticker !== 'CASH' && TICKER_REGEX.test(ticker)) {
-      const search = await finnhubFetch(`/search?q=${ticker}`, finnhubKey)
-      const match = (search.result || []).find((r: any) => r.symbol === ticker)
-      if (match) {
-        // profile2 is empty for ETFs and 403s for some symbols; fall back to other names.
-        // A 429 is rethrown so the whole lookup is retried next run.
-        const profile = await finnhubFetch(`/stock/profile2?symbol=${ticker}`, finnhubKey).catch((err) => {
-          if (err.status === 429) throw err
-          return {}
-        })
-        meta = { name: profile.name || null, searchName: match.description || null, type: match.type || null }
+  const keptDescription = sameTicker && existing.description ? existing.description : providerDesc
+  let lookup: MetaLookup = { kind: 'ok', meta: null }
+  if (ticker && ticker !== 'CASH' && TICKER_REGEX.test(ticker)) {
+    let pending = run.metadata.get(ticker)
+    if (!pending) {
+      if (run.metadataRefreshesLeft <= 0) {
+        // Over this run's budget: keep the stored metadata unmarked so a later night picks it up
+        run.metadataDeferred.add(ticker)
+        return { description: keptDescription }
       }
+      run.metadataRefreshesLeft--
+      pending = lookupSecurityMetadata(run, ticker, finnhubKey)
+      run.metadata.set(ticker, pending)
     }
-    return {
-      // Search names are all caps and truncated, so prefer SimpleFIN's name over them
-      description: meta?.name || providerDesc || meta?.searchName || null,
-      security_type: meta?.type || null,
-      provider_description: providerDesc,
-      metadata_refreshed_at: new Date().toISOString(),
-    }
-  } catch (err) {
-    const description = sameTicker && existing.description ? existing.description : providerDesc
-    if ((err as any).status === 429) {
-      console.error('Security metadata rate limited, retrying next run:', ticker)
-      // Leave provider_description and metadata_refreshed_at unchanged so the next run retries
-      return { description }
-    }
-    console.error('Security metadata error, not retrying until the TTL passes:', ticker, (err as Error).message)
-    return { description, provider_description: providerDesc, metadata_refreshed_at: new Date().toISOString() }
+    lookup = await pending
+  }
+
+  if (lookup.kind === 'rateLimited') {
+    // Leave provider_description and metadata_refreshed_at unchanged so the next run retries
+    return { description: keptDescription }
+  }
+  if (lookup.kind === 'failed') {
+    return { description: keptDescription, provider_description: providerDesc, metadata_refreshed_at: new Date().toISOString() }
+  }
+  const meta = lookup.meta
+  return {
+    // Search names are all caps and truncated, so prefer SimpleFIN's name over them
+    description: meta?.name || providerDesc || meta?.searchName || null,
+    security_type: meta?.type || null,
+    provider_description: providerDesc,
+    metadata_refreshed_at: new Date().toISOString(),
   }
 }
 
 async function syncSimpleFINForUser(
+  run: Run,
   supabase: ReturnType<typeof createClient>,
   uid: string,
   finnhubKey: string,
@@ -384,7 +458,7 @@ async function syncSimpleFINForUser(
             ? mv / sh
             : (!isNaN(mv) && mv > 0 ? mv : null)
 
-          const metadata = await resolveHoldingMetadata(cachedById.get(h.id), h.symbol, h.description, finnhubKey)
+          const metadata = await resolveHoldingMetadata(run, cachedById.get(h.id), h.symbol, h.description, finnhubKey)
 
           await (supabase as any).schema('batchfolio').from('holdings').upsert(
             {
@@ -558,6 +632,8 @@ Deno.serve(async (req) => {
 
   const finnhubKey = Deno.env.get('FINNHUB_API_KEY')!
   const today = new Date().toISOString().split('T')[0]
+  const startedAt = Date.now()
+  const run = newRun()
 
   // BatchFolio users only. The auth pool is shared with other apps, so list users from this schema.
   let userIds: string[]
@@ -594,7 +670,7 @@ Deno.serve(async (req) => {
 
     try {
       // Sync SimpleFIN data first (if user has a connection)
-      await syncSimpleFINForUser(supabase, uid, finnhubKey)
+      await syncSimpleFINForUser(run, supabase, uid, finnhubKey)
 
       // Fetch accounts for this user (include balance for synced accounts, exclude excluded accounts)
       const { data: accounts } = await supabase.schema('batchfolio').from('accounts')
@@ -613,11 +689,11 @@ Deno.serve(async (req) => {
 
       // Fetch holdings for non-synced accounts (manual)
       const manualAccountIds = activeAccounts.filter((a: { is_synced: boolean }) => !a.is_synced).map((a: { id: string }) => a.id)
-      let manualHoldings: { ticker: string; shares: number; avg_cost_basis: number; account_id: string }[] = []
+      let manualHoldings: { ticker: string; shares: number; avg_cost_basis: number; account_id: string; last_synced_price: number | null }[] = []
 
       if (manualAccountIds.length > 0) {
         const { data: holdingRows } = await supabase.schema('batchfolio').from('holdings')
-          .select('ticker, shares, avg_cost_basis, account_id')
+          .select('ticker, shares, avg_cost_basis, account_id, last_synced_price')
           .in('account_id', manualAccountIds)
         manualHoldings = holdingRows ?? []
       }
@@ -628,12 +704,32 @@ Deno.serve(async (req) => {
 
       await Promise.all(
         tickers.map(async (ticker) => {
-          try {
-            const data = await finnhubFetch(`/quote?symbol=${ticker}`, finnhubKey)
-            priceMap[ticker] = data.c ?? 0
-          } catch {
-            priceMap[ticker] = 0
+          const quote = await getQuote(run, ticker, finnhubKey)
+          if (quote !== null) {
+            priceMap[ticker] = quote
+            return
           }
+          // A failed quote must not value the position at 0. Fall back to a price stored on
+          // one of the user's holdings, then to the latest holding snapshot before today.
+          let fallback = Number(manualHoldings.find((h) => h.ticker === ticker && Number(h.last_synced_price) > 0)?.last_synced_price) || 0
+          if (!fallback) {
+            const { data: lastSnap } = await supabase.schema('batchfolio').from('holding_snapshots')
+              .select('price')
+              .eq('user_id', uid)
+              .eq('ticker', ticker)
+              .lt('date', today)
+              .gt('price', 0)
+              .order('date', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+            fallback = Number(lastSnap?.price) || 0
+          }
+          if (fallback > 0) {
+            run.quoteFallbacks++
+          } else {
+            console.error('[nightly] Quote failed and no earlier price is known, valuing at 0:', ticker)
+          }
+          priceMap[ticker] = fallback
         }),
       )
 
@@ -741,6 +837,15 @@ Deno.serve(async (req) => {
   const processed = results.filter((r) => r.ok && !r.skipped).length
   const skipped = results.filter((r) => r.skipped).length
   const failed = results.filter((r) => !r.ok).length
+
+  // Run totals only, no user data
+  console.log('[nightly] Run summary', JSON.stringify({
+    durationMs: Date.now() - startedAt,
+    finnhubCalls: run.finnhubCalls,
+    finnhub429s: run.finnhub429s,
+    quoteFallbacks: run.quoteFallbacks,
+    metadataDeferred: run.metadataDeferred.size,
+  }))
 
   return new Response(
     JSON.stringify({ date: today, processed, skipped, failed, results }),

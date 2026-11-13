@@ -136,7 +136,10 @@ transactions:
   amount, description, payee, memo, pending, tx_type, liability_id
 
 simplefin_connections:
-  id, user_id, access_url, last_synced_at
+  id, user_id, access_url, last_synced_at, connection_errors
+  The browser role can read only user_id, last_synced_at and connection_errors on its
+  own row and cannot write. access_url is read and written only server-side with the
+  service role (see supabase/manual/2026-11-13_simplefin_column_privileges.sql).
 
 net_worth_snapshots:
   id, user_id, date, total_assets, total_liabilities, net_worth

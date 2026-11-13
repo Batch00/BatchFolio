@@ -156,7 +156,7 @@ All tables live in the `batchfolio` schema. RLS is enabled on every table.
 | `net_worth_snapshots` | `user_id`, `date`, `total_assets`, `total_liabilities`, `net_worth` |
 | `watchlist` | `user_id`, `ticker`, `added_at` -- unique on `(user_id, ticker)` |
 | `transactions` | `account_id`, `user_id`, `simplefin_id`, `amount`, `description`, `posted_at`, `tx_type`, `category`, `liability_id` |
-| `simplefin_connections` | `user_id`, `access_url`, `last_synced_at` |
+| `simplefin_connections` | `user_id`, `access_url`, `last_synced_at`, `connection_errors`. The browser role can read only `user_id`, `last_synced_at` and `connection_errors` on its own row and cannot write; `access_url` is read and written only server-side with the service role |
 
 RLS policies restrict all reads and writes to `auth.uid() = user_id`. Holdings join to `accounts` to verify ownership since they do not have a direct `user_id` column.
 
