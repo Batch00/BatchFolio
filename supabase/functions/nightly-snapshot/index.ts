@@ -53,6 +53,25 @@ function isSimplefinUrl(value: string): boolean {
 
 const TICKER_REGEX = /^[A-Z0-9.\-]{1,10}$/
 const METADATA_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const FINNHUB_SPACING_MS = 250
+let finnhubQueue: Promise<void> = Promise.resolve()
+let lastFinnhubStart = 0
+
+// Every Finnhub call in this function goes through here. Calls wait their turn in a queue
+// and start at least FINNHUB_SPACING_MS after the previous call started, parallel callers too.
+// Throws on a non-2xx response with the HTTP status on err.status.
+async function finnhubFetch(path: string, finnhubKey: string): Promise<any> {
+  const turn = finnhubQueue.then(async () => {
+    const wait = lastFinnhubStart + FINNHUB_SPACING_MS - Date.now()
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait))
+    lastFinnhubStart = Date.now()
+  })
+  finnhubQueue = turn
+  await turn
+  const res = await fetch(`https://finnhub.io/api/v1${path}&token=${finnhubKey}`)
+  if (!res.ok) throw Object.assign(new Error(`Finnhub error ${res.status}`), { status: res.status })
+  return res.json()
+}
 
 // Mirrors resolveHoldingMetadata in lib/security-metadata.js - keep in sync.
 // Re-pulls name and security type from Finnhub when the holding is new, its ticker or
@@ -80,16 +99,15 @@ async function resolveHoldingMetadata(
   try {
     let meta: { name: string | null; searchName: string | null; type: string | null } | null = null
     if (ticker && ticker !== 'CASH' && TICKER_REGEX.test(ticker)) {
-      const finnhub = async (path: string) => {
-        const res = await fetch(`https://finnhub.io/api/v1${path}&token=${finnhubKey}`)
-        if (!res.ok) throw new Error(`Finnhub error ${res.status}`)
-        return res.json()
-      }
-      const search = await finnhub(`/search?q=${ticker}`)
+      const search = await finnhubFetch(`/search?q=${ticker}`, finnhubKey)
       const match = (search.result || []).find((r: any) => r.symbol === ticker)
       if (match) {
-        // profile2 is empty for ETFs and 403s for some symbols; fall back to other names
-        const profile = await finnhub(`/stock/profile2?symbol=${ticker}`).catch(() => ({}))
+        // profile2 is empty for ETFs and 403s for some symbols; fall back to other names.
+        // A 429 is rethrown so the whole lookup is retried next run.
+        const profile = await finnhubFetch(`/stock/profile2?symbol=${ticker}`, finnhubKey).catch((err) => {
+          if (err.status === 429) throw err
+          return {}
+        })
         meta = { name: profile.name || null, searchName: match.description || null, type: match.type || null }
       }
     }
@@ -101,9 +119,14 @@ async function resolveHoldingMetadata(
       metadata_refreshed_at: new Date().toISOString(),
     }
   } catch (err) {
-    console.error('Security metadata error:', ticker, (err as Error).message)
-    // Leave provider_description unchanged so the next run retries
-    return { description: sameTicker && existing.description ? existing.description : providerDesc }
+    const description = sameTicker && existing.description ? existing.description : providerDesc
+    if ((err as any).status === 429) {
+      console.error('Security metadata rate limited, retrying next run:', ticker)
+      // Leave provider_description and metadata_refreshed_at unchanged so the next run retries
+      return { description }
+    }
+    console.error('Security metadata error, not retrying until the TTL passes:', ticker, (err as Error).message)
+    return { description, provider_description: providerDesc, metadata_refreshed_at: new Date().toISOString() }
   }
 }
 
@@ -481,6 +504,27 @@ async function syncSimpleFINForUser(
   }
 }
 
+const USER_PAGE_SIZE = 1000
+
+// Distinct user_ids with a row in batchfolio.accounts or batchfolio.simplefin_connections.
+// Reads in pages so the project's max rows setting cannot truncate the list.
+async function listBatchFolioUserIds(supabase: any): Promise<string[]> {
+  const ids = new Set<string>()
+  // Each table is ordered by a unique column so pages do not overlap or skip rows
+  for (const [table, orderBy] of [['accounts', 'id'], ['simplefin_connections', 'user_id']]) {
+    for (let from = 0; ; from += USER_PAGE_SIZE) {
+      const { data, error } = await supabase.schema('batchfolio').from(table)
+        .select('user_id')
+        .order(orderBy)
+        .range(from, from + USER_PAGE_SIZE - 1)
+      if (error) throw new Error(error.message)
+      for (const row of data ?? []) ids.add(row.user_id)
+      if (!data || data.length < USER_PAGE_SIZE) break
+    }
+  }
+  return [...ids]
+}
+
 // Constant-time check of the x-cron-secret header against CRON_SECRET.
 // Both values are hashed first so the comparison does not leak their lengths.
 async function hasValidCronSecret(req: Request): Promise<boolean> {
@@ -515,22 +559,33 @@ Deno.serve(async (req) => {
   const finnhubKey = Deno.env.get('FINNHUB_API_KEY')!
   const today = new Date().toISOString().split('T')[0]
 
-  // Get all users
-  const { data: userList, error: userErr } = await supabase.auth.admin.listUsers()
-  if (userErr || !userList) {
+  // BatchFolio users only. The auth pool is shared with other apps, so list users from this schema.
+  let userIds: string[]
+  try {
+    userIds = await listBatchFolioUserIds(supabase)
+  } catch (err) {
+    console.error('[nightly] Failed to list users:', (err as Error).message)
     return new Response(JSON.stringify({ error: 'Failed to list users' }), { status: 500 })
   }
 
   // Find demo user ID - check by email as fallback if DEMO_USER_ID env var is not set
-  const demoUserByEmail = userList.users.find((u: any) => u.email === 'demo@batchfolio.app')
-  const DEMO_USER_ID = Deno.env.get('DEMO_USER_ID') || demoUserByEmail?.id || ''
+  let DEMO_USER_ID = Deno.env.get('DEMO_USER_ID') || ''
+  if (!DEMO_USER_ID) {
+    for (const uid of userIds) {
+      const { data, error } = await supabase.auth.admin.getUserById(uid)
+      if (error) {
+        return new Response(JSON.stringify({ error: 'Failed to look up users' }), { status: 500 })
+      }
+      if (data.user?.email === 'demo@batchfolio.app') {
+        DEMO_USER_ID = uid
+        break
+      }
+    }
+  }
 
-  const users = userList.users
   const results: { uid: string; ok: boolean; skipped?: boolean; error?: string }[] = []
 
-  for (const user of users) {
-    const uid = user.id
-
+  for (const uid of userIds) {
     // Skip demo user - their snapshot history is seeded and should not be overwritten
     if (DEMO_USER_ID && uid === DEMO_USER_ID) {
       results.push({ uid, ok: true, skipped: true })
@@ -574,10 +629,7 @@ Deno.serve(async (req) => {
       await Promise.all(
         tickers.map(async (ticker) => {
           try {
-            const res = await fetch(
-              `https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${finnhubKey}`,
-            )
-            const data = await res.json()
+            const data = await finnhubFetch(`/quote?symbol=${ticker}`, finnhubKey)
             priceMap[ticker] = data.c ?? 0
           } catch {
             priceMap[ticker] = 0
