@@ -150,6 +150,12 @@ account_snapshots:
 
 watchlist:
   id, user_id, ticker, added_at. Unique on (user_id, ticker).
+
+snapshot_runs:
+  id, started_at, finished_at, run_date, processed, skipped, failed,
+  budget_exceeded, duration_ms, finnhub_calls, notes
+  One row per nightly-snapshot run, counts only. Service role only: RLS on, no policies
+  (see supabase/manual/2026-11-19_snapshot_runs.sql).
 ```
 
 Holdings RLS joins to accounts to verify `accounts.user_id = auth.uid()`. From the client, a plain `.from('holdings').select('*')` returns only the current user's holdings.
@@ -196,7 +202,10 @@ SimpleFIN syncs real bank/brokerage balances and transactions via a user-provide
 
 **`nightly-snapshot`** (Supabase Edge Function):
 - Triggered nightly at 23:00 UTC via `pg_cron` (cron: `0 23 * * *`)
-- Syncs SimpleFIN first, then calculates and inserts a net worth snapshot for each user
+- For each user: syncs SimpleFIN within `SYNC_BUDGET_MS` (60s per user, and nothing past `RUN_BUDGET_MS`, 120s from the start of the run), then always upserts the net worth, account and holding snapshots from the stored balances and holdings. A sync failure or timeout must never skip the snapshot
+- Finnhub metadata refreshes run after every user's snapshot is written, once per ticker, only while the run budget lasts. The metadata TTL is 5-9 days per ticker (`metadataTtlMs`, mirrored in `lib/security-metadata.js`)
+- Transactions, holdings and snapshots are written in batched array upserts (chunks of 500). Every row in one batch must have the same keys, because supabase-js nulls a column a row leaves out
+- Records each run in `batchfolio.snapshot_runs` (insert at start, update at end) and logs a `[nightly] Run summary` line
 - Skips the demo user (checked against `DEMO_EMAIL`)
 - All `.from()` calls must use `.schema('batchfolio')` because the client is initialized without a default schema
 - Secrets use `APP_SUPABASE_URL` and `SERVICE_ROLE_KEY` naming - the `SUPABASE_` prefix is reserved by Supabase and cannot be used for custom secrets

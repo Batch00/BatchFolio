@@ -51,11 +51,30 @@ CREATE TABLE batchfolio.watchlist (
   UNIQUE (user_id, ticker)
 );
 
+-- One row per nightly-snapshot run, counts only. Service role only: RLS on, no policies.
+-- See supabase/manual/2026-11-19_snapshot_runs.sql.
+CREATE TABLE batchfolio.snapshot_runs (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  started_at       timestamptz,
+  finished_at      timestamptz,
+  run_date         date,
+  processed        int,
+  skipped          int,
+  failed           int,
+  budget_exceeded  int,
+  duration_ms      int,
+  finnhub_calls    int,
+  notes            text
+);
+
 ALTER TABLE batchfolio.accounts            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE batchfolio.holdings            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE batchfolio.liabilities         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE batchfolio.net_worth_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE batchfolio.watchlist           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE batchfolio.snapshot_runs       ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON TABLE batchfolio.snapshot_runs FROM public, anon, authenticated;
 
 CREATE POLICY "accounts: owner full access"
   ON batchfolio.accounts FOR ALL

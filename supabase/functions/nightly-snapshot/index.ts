@@ -12,6 +12,11 @@
 // alter table batchfolio.holdings add column if not exists security_type text;
 // alter table batchfolio.holdings add column if not exists provider_description text;
 // alter table batchfolio.holdings add column if not exists metadata_refreshed_at timestamptz;
+// supabase/manual/2026-11-19_snapshot_runs.sql (creates batchfolio.snapshot_runs)
+//
+// Order of a run: for each user, sync SimpleFIN within SYNC_BUDGET_MS, then always write
+// that user's snapshots from whatever is stored. Finnhub metadata refreshes run last, only
+// while the run is inside RUN_BUDGET_MS.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -52,11 +57,31 @@ function isSimplefinUrl(value: string): boolean {
 }
 
 const TICKER_REGEX = /^[A-Z0-9.\-]{1,10}$/
-const METADATA_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const DAY_MS = 24 * 60 * 60 * 1000
+const METADATA_TTL_MIN_MS = 5 * DAY_MS
+const METADATA_TTL_SPREAD_MS = 4 * DAY_MS
 const FINNHUB_SPACING_MS = 1000
 const METADATA_REFRESH_BUDGET = 20
+// Time a single user's SimpleFIN sync may take before it stops and the snapshot is written
+const SYNC_BUDGET_MS = 60_000
+// Time from the start of the run after which no sync continues and no metadata refresh starts.
+// Snapshots are still written after it.
+const RUN_BUDGET_MS = 120_000
+const UPSERT_CHUNK_SIZE = 500
 let finnhubQueue: Promise<void> = Promise.resolve()
 let lastFinnhubStart = 0
+
+// Mirrors metadataTtlMs in lib/security-metadata.js - keep in sync.
+// Effective metadata TTL between 5 and 9 days, fixed per ticker by an FNV-1a hash, so
+// holdings refreshed on the same night do not all expire on the same night again.
+function metadataTtlMs(ticker: string): number {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < ticker.length; i++) {
+    hash ^= ticker.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return METADATA_TTL_MIN_MS + ((hash >>> 0) % (METADATA_TTL_SPREAD_MS + 1))
+}
 
 type SecurityMeta = { name: string | null; searchName: string | null; type: string | null }
 type MetaLookup =
@@ -64,12 +89,24 @@ type MetaLookup =
   | { kind: 'rateLimited' }
   | { kind: 'failed' }
 
-// State for one invocation. The caches make each ticker's quote and metadata lookup
-// happen at most once per run, shared across users and accounts.
+// A holding whose metadata is due for a Finnhub refresh. The refresh runs after every
+// user's snapshot is written (see refreshMetadata).
+type MetadataTask = {
+  accountId: string
+  simplefinId: string
+  ticker: string
+  providerDesc: string | null
+  keptDescription: string | null
+}
+
+// State for one invocation. The quote cache makes each ticker's quote happen at most once
+// per run, shared across users and accounts. Metadata lookups are queued during the sync
+// and done once per ticker at the end.
 type Run = {
   quotes: Map<string, Promise<number | null>>
-  metadata: Map<string, Promise<MetaLookup>>
+  metadataQueue: MetadataTask[]
   metadataRefreshesLeft: number
+  metadataRefreshed: number
   metadataDeferred: Set<string>
   finnhubCalls: number
   finnhub429s: number
@@ -79,8 +116,9 @@ type Run = {
 function newRun(): Run {
   return {
     quotes: new Map(),
-    metadata: new Map(),
+    metadataQueue: [],
     metadataRefreshesLeft: METADATA_REFRESH_BUDGET,
+    metadataRefreshed: 0,
     metadataDeferred: new Set(),
     finnhubCalls: 0,
     finnhub429s: 0,
@@ -146,52 +184,14 @@ async function lookupSecurityMetadata(run: Run, ticker: string, finnhubKey: stri
   }
 }
 
-// Mirrors resolveHoldingMetadata in lib/security-metadata.js - keep in sync. The per-run
-// cache and the METADATA_REFRESH_BUDGET are specific to this function.
-// Re-pulls name and security type from Finnhub when the holding is new, its ticker or
-// SimpleFIN name changed, or the cache is older than METADATA_TTL_MS. Otherwise keeps the
-// cached values so a stale broker description (e.g. a reassigned ticker) cannot overwrite them.
-async function resolveHoldingMetadata(
-  run: Run,
-  existing: any,
-  ticker: string,
-  providerDescription: string | undefined,
-  finnhubKey: string,
-): Promise<Record<string, string | null>> {
-  const providerDesc = providerDescription || null
-  const sameTicker = existing?.ticker === ticker
-  const stale =
-    !existing ||
-    !sameTicker ||
-    existing.provider_description !== providerDesc ||
-    !existing.metadata_refreshed_at ||
-    Date.now() - new Date(existing.metadata_refreshed_at).getTime() > METADATA_TTL_MS
-
-  if (!stale) {
-    return { description: existing.description, provider_description: providerDesc }
-  }
-
-  const keptDescription = sameTicker && existing.description ? existing.description : providerDesc
-  let lookup: MetaLookup = { kind: 'ok', meta: null }
-  if (ticker && ticker !== 'CASH' && TICKER_REGEX.test(ticker)) {
-    let pending = run.metadata.get(ticker)
-    if (!pending) {
-      if (run.metadataRefreshesLeft <= 0) {
-        // Over this run's budget: keep the stored metadata unmarked so a later night picks it up
-        run.metadataDeferred.add(ticker)
-        return { description: keptDescription }
-      }
-      run.metadataRefreshesLeft--
-      pending = lookupSecurityMetadata(run, ticker, finnhubKey)
-      run.metadata.set(ticker, pending)
-    }
-    lookup = await pending
-  }
-
-  if (lookup.kind === 'rateLimited') {
-    // Leave provider_description and metadata_refreshed_at unchanged so the next run retries
-    return { description: keptDescription }
-  }
+// Fields to store after a metadata lookup. Null when the lookup was rate limited: the stored
+// provider_description and metadata_refreshed_at stay unchanged so the next run retries.
+function metadataFromLookup(
+  lookup: MetaLookup,
+  keptDescription: string | null,
+  providerDesc: string | null,
+): Record<string, string | null> | null {
+  if (lookup.kind === 'rateLimited') return null
   if (lookup.kind === 'failed') {
     return { description: keptDescription, provider_description: providerDesc, metadata_refreshed_at: new Date().toISOString() }
   }
@@ -205,40 +205,185 @@ async function resolveHoldingMetadata(
   }
 }
 
+// Mirrors the refresh rule and field mapping of resolveHoldingMetadata in
+// lib/security-metadata.js - keep in sync. Unlike that route, this never calls Finnhub
+// during the sync: when a lookup is due it keeps the stored metadata unmarked and returns
+// lookup: true, and refreshMetadata does the lookup after every snapshot is written.
+// A refresh is due when the holding is new, its ticker or SimpleFIN name changed, or the
+// cache is older than metadataTtlMs(ticker). Otherwise keeps the cached values so a stale
+// broker description (e.g. a reassigned ticker) cannot overwrite them.
+function planHoldingMetadata(
+  existing: any,
+  ticker: string,
+  providerDescription: string | undefined,
+): { fields: Record<string, string | null>; lookup: boolean } {
+  const providerDesc = providerDescription || null
+  const sameTicker = existing?.ticker === ticker
+  const stale =
+    !existing ||
+    !sameTicker ||
+    existing.provider_description !== providerDesc ||
+    !existing.metadata_refreshed_at ||
+    Date.now() - new Date(existing.metadata_refreshed_at).getTime() > metadataTtlMs(ticker)
+
+  if (!stale) {
+    return { fields: { description: existing.description, provider_description: providerDesc }, lookup: false }
+  }
+
+  const keptDescription = sameTicker && existing.description ? existing.description : providerDesc
+  if (ticker && ticker !== 'CASH' && TICKER_REGEX.test(ticker)) {
+    return { fields: { description: keptDescription }, lookup: true }
+  }
+  // Not a Finnhub symbol (e.g. a mutual fund), so there is nothing to look up
+  return { fields: metadataFromLookup({ kind: 'ok', meta: null }, keptDescription, providerDesc)!, lookup: false }
+}
+
+// Runs after every user's snapshot is written. Looks up each queued ticker once while the
+// run is before the deadline and METADATA_REFRESH_BUDGET lasts. Tickers left over keep
+// their stored metadata unmarked so a later night picks them up.
+async function refreshMetadata(run: Run, supabase: any, finnhubKey: string, deadline: number): Promise<void> {
+  const byTicker = new Map<string, MetadataTask[]>()
+  for (const task of run.metadataQueue) {
+    const tasks = byTicker.get(task.ticker) ?? []
+    tasks.push(task)
+    byTicker.set(task.ticker, tasks)
+  }
+
+  for (const [ticker, tasks] of byTicker) {
+    if (Date.now() >= deadline || run.metadataRefreshesLeft <= 0) {
+      run.metadataDeferred.add(ticker)
+      continue
+    }
+    run.metadataRefreshesLeft--
+    const lookup = await lookupSecurityMetadata(run, ticker, finnhubKey)
+    for (const task of tasks) {
+      const fields = metadataFromLookup(lookup, task.keptDescription, task.providerDesc)
+      if (!fields) continue
+      const { error } = await supabase.schema('batchfolio').from('holdings')
+        .update(fields)
+        .eq('account_id', task.accountId)
+        .eq('simplefin_id', task.simplefinId)
+      if (error) console.error('[nightly] Security metadata update failed:', ticker, error.message)
+    }
+    run.metadataRefreshed++
+  }
+}
+
+// Upserts rows into a batchfolio table, UPSERT_CHUNK_SIZE rows per call. Returns the first
+// error message, or null. Every row in one call must have the same keys: supabase-js sends
+// the union of keys and writes null for any key a row leaves out.
+async function upsertRows(supabase: any, table: string, rows: Record<string, unknown>[], onConflict: string): Promise<string | null> {
+  for (let i = 0; i < rows.length; i += UPSERT_CHUNK_SIZE) {
+    const { error } = await supabase.schema('batchfolio').from(table)
+      .upsert(rows.slice(i, i + UPSERT_CHUNK_SIZE), { onConflict })
+    if (error) return error.message
+  }
+  return null
+}
+
+type SfTransaction = {
+  id: string
+  posted?: number
+  transacted_at?: string
+  amount?: string
+  description?: string
+  payee?: string
+  memo?: string
+  pending?: boolean
+}
+
+// Transaction rows for one account, skipping rows with no id or a zero or unparseable amount.
+// Keyed by simplefin_id so a repeated id cannot fail the batch; the last copy wins, as it
+// did when each row was upserted on its own.
+function transactionRows(sfTransactions: SfTransaction[], base: Record<string, string>): Record<string, unknown>[] {
+  const rows = new Map<string, Record<string, unknown>>()
+  for (const tx of sfTransactions) {
+    if (!tx.id) continue
+    const amount = parseFloat(tx.amount ?? '0')
+    if (amount === 0 || isNaN(amount)) continue
+
+    rows.set(tx.id, {
+      ...base,
+      simplefin_id: tx.id,
+      posted_at: tx.posted
+        ? new Date(tx.posted * 1000).toISOString()
+        : null,
+      transacted_at: tx.transacted_at
+        ? new Date(tx.transacted_at * 1000).toISOString()
+        : null,
+      amount,
+      description: tx.description || null,
+      payee: tx.payee || null,
+      memo: tx.memo || null,
+      pending: tx.pending || false,
+      tx_type: amount > 0 ? 'credit' : 'debit',
+    })
+  }
+  return [...rows.values()]
+}
+
+class SyncBudgetExceeded extends Error {}
+
+type SyncOutcome = {
+  status: 'none' | 'ok' | 'failed' | 'budget'
+  accountsDone: number
+  accountsTotal: number
+}
+
+// Syncs one user's SimpleFIN data. Stops with status 'budget' once Date.now() passes
+// deadline: checked before the request, between accounts, and on the request itself.
+// Never throws for a sync problem, so the caller can always go on to the snapshot.
 async function syncSimpleFINForUser(
   run: Run,
   supabase: ReturnType<typeof createClient>,
   uid: string,
-  finnhubKey: string,
-): Promise<void> {
+  deadline: number,
+): Promise<SyncOutcome> {
+  const progress: SyncOutcome = { status: 'none', accountsDone: 0, accountsTotal: 0 }
+  const checkDeadline = () => {
+    if (Date.now() >= deadline) throw new SyncBudgetExceeded()
+  }
+
   const { data: conn } = await (supabase as any).schema('batchfolio').from('simplefin_connections')
     .select('access_url')
     .eq('user_id', uid)
     .maybeSingle()
 
-  if (!conn?.access_url) return
+  if (!conn?.access_url) return progress
 
   // Refuse to send credentials anywhere but a SimpleFIN host. Never log the URL itself.
   if (!isSimplefinUrl(conn.access_url)) {
     console.error('[nightly] Stored SimpleFIN URL failed the host check, skipping sync for', uid)
-    return
+    return { ...progress, status: 'failed' }
   }
 
   try {
+    checkDeadline()
     const url = new URL(conn.access_url)
     const username = url.username
     const password = url.password
     const baseUrl = `${url.protocol}//${url.host}${url.pathname}`
     const credentials = btoa(`${username}:${password}`)
 
-    // Fetch 90 days of data including transactions
+    // Fetch 90 days of data including transactions. The request is aborted at the deadline.
     const startDate = Math.floor((Date.now() - 90 * 24 * 60 * 60 * 1000) / 1000)
-    const sfRes = await fetch(`${baseUrl}/accounts?version=2&start-date=${startDate}`, {
-      headers: { Authorization: `Basic ${credentials}` },
-    })
-    if (!sfRes.ok) return
-
-    const sfData = await sfRes.json()
+    let sfData: any
+    try {
+      const sfRes = await fetch(`${baseUrl}/accounts?version=2&start-date=${startDate}`, {
+        headers: { Authorization: `Basic ${credentials}` },
+        signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+      })
+      if (!sfRes.ok) {
+        console.error('[nightly] SimpleFIN returned HTTP', sfRes.status, 'for', uid)
+        return { ...progress, status: 'failed' }
+      }
+      sfData = await sfRes.json()
+    } catch (err) {
+      const name = (err as Error)?.name
+      if (name === 'TimeoutError' || name === 'AbortError') throw new SyncBudgetExceeded()
+      // Never pass the fetch error on: its message can include the SimpleFIN URL
+      throw new Error('SimpleFIN request failed')
+    }
 
     // Parse connection errors from SimpleFIN response
     const sfErrors: { code?: string; msg?: string; message?: string; conn_id?: string }[] =
@@ -270,19 +415,15 @@ async function syncSimpleFINForUser(
         currency?: string
         market_value?: string
       }[]
-      transactions?: {
-        id: string
-        posted?: number
-        transacted_at?: string
-        amount?: string
-        description?: string
-        payee?: string
-        memo?: string
-        pending?: boolean
-      }[]
+      transactions?: SfTransaction[]
     }[] = sfData.accounts ?? []
 
-    for (const sfAcc of sfAccounts) {
+    progress.accountsTotal = sfAccounts.length
+
+    for (const [index, sfAcc] of sfAccounts.entries()) {
+      progress.accountsDone = index
+      checkDeadline()
+
       // Route credit cards to liabilities + sync transactions via shadow account
       if (isCreditCardAccount(sfAcc.name, sfAcc.balance)) {
         const balanceAbs = Math.abs(parseFloat(sfAcc.balance ?? '0') || 0)
@@ -345,32 +486,15 @@ async function syncSimpleFINForUser(
               .select('id')
               .maybeSingle()
 
-            // 4. Sync credit card transactions
+            // 4. Sync credit card transactions in one batch
             if (shadowAcc?.id) {
-              const sfTransactions = sfAcc.transactions ?? []
-              for (const tx of sfTransactions) {
-                if (!tx.id) continue
-                const amount = parseFloat(tx.amount ?? '0')
-                if (amount === 0 || isNaN(amount)) continue
-
-                await (supabase as any).schema('batchfolio').from('transactions').upsert(
-                  {
-                    account_id: shadowAcc.id,
-                    liability_id: liabilityId,
-                    user_id: uid,
-                    simplefin_id: tx.id,
-                    posted_at: tx.posted ? new Date(tx.posted * 1000).toISOString() : null,
-                    transacted_at: tx.transacted_at ? new Date(tx.transacted_at * 1000).toISOString() : null,
-                    amount,
-                    description: tx.description || null,
-                    payee: tx.payee || null,
-                    memo: tx.memo || null,
-                    pending: tx.pending || false,
-                    tx_type: amount > 0 ? 'credit' : 'debit',
-                  },
-                  { onConflict: 'simplefin_id' },
-                )
-              }
+              const rows = transactionRows(sfAcc.transactions ?? [], {
+                account_id: shadowAcc.id,
+                liability_id: liabilityId,
+                user_id: uid,
+              })
+              const txErr = await upsertRows(supabase, 'transactions', rows, 'simplefin_id')
+              if (txErr) console.error('[nightly] Credit card transactions upsert failed for', uid, txErr)
             }
           }
         } catch {
@@ -436,10 +560,13 @@ async function syncSimpleFINForUser(
 
       if (sfHoldings.length > 0) {
         const { data: cachedHoldings } = await (supabase as any).schema('batchfolio').from('holdings')
-          .select('simplefin_id, ticker, description, provider_description, metadata_refreshed_at')
+          .select('simplefin_id, ticker, description, security_type, provider_description, metadata_refreshed_at')
           .eq('account_id', accountId)
         const cachedById = new Map((cachedHoldings || []).map((c: any) => [c.simplefin_id, c]))
+        const updatedAt = new Date().toISOString()
 
+        // Keyed by simplefin_id so a repeated id cannot fail the batch; the last copy wins
+        const holdingRows = new Map<string, Record<string, unknown>>()
         for (const h of sfHoldings) {
           const sh = parseFloat(h.shares ?? '0')
           const sharesNum = !isNaN(sh) ? sh : 0
@@ -460,26 +587,42 @@ async function syncSimpleFINForUser(
             ? mv / sh
             : (!isNaN(mv) && mv > 0 ? mv : null)
 
-          const metadata = await resolveHoldingMetadata(run, cachedById.get(h.id), h.symbol, h.description, finnhubKey)
-
-          await (supabase as any).schema('batchfolio').from('holdings').upsert(
-            {
-              account_id: accountId,
+          const existing: any = cachedById.get(h.id)
+          const metadata = planHoldingMetadata(existing, h.symbol, h.description)
+          if (metadata.lookup) {
+            run.metadataQueue.push({
+              accountId,
+              simplefinId: h.id,
               ticker: h.symbol,
-              shares: sharesNum,
-              avg_cost_basis: avgCost,
-              simplefin_id: h.id,
-              is_synced: true,
-              last_synced_price: lastSyncedPrice,
-              ...metadata,
-              cost_basis_total: costBasisTotal,
-              currency: h.currency || 'USD',
-              purchase_price: purchasePrice,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: 'account_id,simplefin_id' },
-          )
+              providerDesc: h.description || null,
+              keptDescription: metadata.fields.description,
+            })
+          }
+
+          holdingRows.set(h.id, {
+            account_id: accountId,
+            ticker: h.symbol,
+            shares: sharesNum,
+            avg_cost_basis: avgCost,
+            simplefin_id: h.id,
+            is_synced: true,
+            last_synced_price: lastSyncedPrice,
+            // Every row carries all four metadata columns, stored values unless planHoldingMetadata
+            // changed them, so the batch never nulls a column one row leaves out
+            description: existing?.description ?? null,
+            security_type: existing?.security_type ?? null,
+            provider_description: existing?.provider_description ?? null,
+            metadata_refreshed_at: existing?.metadata_refreshed_at ?? null,
+            ...metadata.fields,
+            cost_basis_total: costBasisTotal,
+            currency: h.currency || 'USD',
+            purchase_price: purchasePrice,
+            updated_at: updatedAt,
+          })
         }
+
+        const holdErr = await upsertRows(supabase, 'holdings', [...holdingRows.values()], 'account_id,simplefin_id')
+        if (holdErr) console.error('[nightly] Holdings upsert failed for', uid, holdErr)
 
         // Calculate cash gap between account balance and holdings market values
         const holdingsTotal = sfHoldings.reduce((sum: number, h: any) => {
@@ -520,9 +663,15 @@ async function syncSimpleFINForUser(
         const toDelete = ((existingHoldings as any[] | null) ?? []).filter(
           (h: any) => h.simplefin_id && !returnedHoldingIds.has(h.simplefin_id)
         )
-        for (const h of toDelete) {
-          await (supabase as any).schema('batchfolio').from('holdings').delete().eq('id', h.id)
-          console.log('Removed stale holding:', h.ticker, h.simplefin_id)
+        if (toDelete.length > 0) {
+          const { error: delErr } = await (supabase as any).schema('batchfolio').from('holdings')
+            .delete()
+            .in('id', toDelete.map((h: any) => h.id))
+          if (delErr) {
+            console.error('[nightly] Stale holdings delete failed for', uid, delErr.message)
+          } else {
+            for (const h of toDelete) console.log('Removed stale holding:', h.ticker, h.simplefin_id)
+          }
         }
       } else if (sfAcc.balance != null) {
         await (supabase as any).schema('batchfolio').from('holdings').upsert(
@@ -539,35 +688,12 @@ async function syncSimpleFINForUser(
         )
       }
 
-      // Sync transactions
-      const sfTransactions = sfAcc.transactions ?? []
-      for (const tx of sfTransactions) {
-        if (!tx.id) continue
-        const amount = parseFloat(tx.amount ?? '0')
-        if (amount === 0 || isNaN(amount)) continue
-
-        await (supabase as any).schema('batchfolio').from('transactions').upsert(
-          {
-            account_id: accountId,
-            user_id: uid,
-            simplefin_id: tx.id,
-            posted_at: tx.posted
-              ? new Date(tx.posted * 1000).toISOString()
-              : null,
-            transacted_at: tx.transacted_at
-              ? new Date(tx.transacted_at * 1000).toISOString()
-              : null,
-            amount,
-            description: tx.description || null,
-            payee: tx.payee || null,
-            memo: tx.memo || null,
-            pending: tx.pending || false,
-            tx_type: amount > 0 ? 'credit' : 'debit',
-          },
-          { onConflict: 'simplefin_id' },
-        )
-      }
+      // Sync transactions in one batch
+      const rows = transactionRows(sfAcc.transactions ?? [], { account_id: accountId, user_id: uid })
+      const txErr = await upsertRows(supabase, 'transactions', rows, 'simplefin_id')
+      if (txErr) console.error('[nightly] Transactions upsert failed for', uid, txErr)
     }
+    progress.accountsDone = sfAccounts.length
 
     await (supabase as any).schema('batchfolio').from('simplefin_connections')
       .update({
@@ -575,8 +701,14 @@ async function syncSimpleFINForUser(
         connection_errors: connectionErrors.length > 0 ? connectionErrors : null,
       })
       .eq('user_id', uid)
+    return { ...progress, status: 'ok' }
   } catch (err) {
+    if (err instanceof SyncBudgetExceeded) {
+      console.error('[nightly] sync budget exceeded', uid, `${progress.accountsDone} of ${progress.accountsTotal} accounts synced`)
+      return { ...progress, status: 'budget' }
+    }
     console.error('[nightly] SimpleFIN sync failed for', uid, String(err))
+    return { ...progress, status: 'failed' }
   }
 }
 
@@ -635,7 +767,28 @@ Deno.serve(async (req) => {
   const finnhubKey = Deno.env.get('FINNHUB_API_KEY')!
   const today = new Date().toISOString().split('T')[0]
   const startedAt = Date.now()
+  const runDeadline = startedAt + RUN_BUDGET_MS
   const run = newRun()
+
+  // Record the run in batchfolio.snapshot_runs (counts only, no user data). A failure to
+  // record it is logged and never stops the run.
+  const { data: runRow, error: runRowErr } = await supabase.schema('batchfolio').from('snapshot_runs')
+    .insert({ started_at: new Date(startedAt).toISOString(), run_date: today })
+    .select('id')
+    .single()
+  if (runRowErr) console.error('[nightly] Could not record run start:', runRowErr.message)
+  const finishRunRow = async (fields: Record<string, unknown>) => {
+    if (!runRow?.id) return
+    const { error } = await supabase.schema('batchfolio').from('snapshot_runs')
+      .update({
+        finished_at: new Date().toISOString(),
+        duration_ms: Date.now() - startedAt,
+        finnhub_calls: run.finnhubCalls,
+        ...fields,
+      })
+      .eq('id', runRow.id)
+    if (error) console.error('[nightly] Could not record run end:', error.message)
+  }
 
   // BatchFolio users only. The auth pool is shared with other apps, so list users from this schema.
   let userIds: string[]
@@ -643,6 +796,7 @@ Deno.serve(async (req) => {
     userIds = await listBatchFolioUserIds(supabase)
   } catch (err) {
     console.error('[nightly] Failed to list users:', (err as Error).message)
+    await finishRunRow({ notes: 'Failed to list users' })
     return new Response(JSON.stringify({ error: 'Failed to list users' }), { status: 500 })
   }
 
@@ -652,6 +806,7 @@ Deno.serve(async (req) => {
     for (const uid of userIds) {
       const { data, error } = await supabase.auth.admin.getUserById(uid)
       if (error) {
+        await finishRunRow({ notes: 'Failed to look up users' })
         return new Response(JSON.stringify({ error: 'Failed to look up users' }), { status: 500 })
       }
       if (data.user?.email === 'demo@batchfolio.app') {
@@ -662,6 +817,8 @@ Deno.serve(async (req) => {
   }
 
   const results: { uid: string; ok: boolean; skipped?: boolean; error?: string }[] = []
+  let budgetExceeded = 0
+  let syncFailed = 0
 
   for (const uid of userIds) {
     // Skip demo user - their snapshot history is seeded and should not be overwritten
@@ -670,10 +827,19 @@ Deno.serve(async (req) => {
       continue
     }
 
+    // Sync SimpleFIN data first (if user has a connection), within this user's budget and
+    // the run's. A sync failure or timeout never stops the snapshot below, which then uses
+    // the balances and holdings already stored.
     try {
-      // Sync SimpleFIN data first (if user has a connection)
-      await syncSimpleFINForUser(run, supabase, uid, finnhubKey)
+      const outcome = await syncSimpleFINForUser(run, supabase, uid, Math.min(Date.now() + SYNC_BUDGET_MS, runDeadline))
+      if (outcome.status === 'budget') budgetExceeded++
+      if (outcome.status === 'failed') syncFailed++
+    } catch (err) {
+      syncFailed++
+      console.error('[nightly] SimpleFIN sync failed for', uid, String(err))
+    }
 
+    try {
       // Fetch accounts for this user (include balance for synced accounts, exclude excluded accounts)
       const { data: accounts } = await supabase.schema('batchfolio').from('accounts')
         .select('id, is_synced, balance, is_excluded, is_hidden')
@@ -769,7 +935,8 @@ Deno.serve(async (req) => {
 
       if (upsertErr) throw new Error(upsertErr.message)
 
-      // Write account balance snapshots
+      // Account balance snapshots, written in one batch
+      const accountSnapshotRows: Record<string, unknown>[] = []
       for (const account of activeAccounts) {
         let balance = 0
 
@@ -787,24 +954,22 @@ Deno.serve(async (req) => {
 
         if (balance <= 0) continue
 
-        await (supabase as any)
-          .schema('batchfolio')
-          .from('account_snapshots')
-          .upsert({
-            user_id: uid,
-            account_id: account.id,
-            balance,
-            date: today,
-          }, { onConflict: 'account_id,date' })
+        accountSnapshotRows.push({
+          user_id: uid,
+          account_id: account.id,
+          balance,
+          date: today,
+        })
       }
 
-      // Write per-holding snapshots for time-based return calculations
+      // Per-holding snapshots for time-based return calculations, written in one batch
       const { data: allHoldings } = await (supabase as any)
         .schema('batchfolio')
         .from('holdings')
         .select('id, ticker, shares, last_synced_price, avg_cost_basis, account_id')
         .in('account_id', activeAccounts.map((a: { id: string }) => a.id))
 
+      const holdingSnapshotRows: Record<string, unknown>[] = []
       for (const holding of (allHoldings ?? []) as {
         id: string; ticker: string; shares: number;
         last_synced_price: number | null; avg_cost_basis: number; account_id: string
@@ -817,23 +982,34 @@ Deno.serve(async (req) => {
         }
         if (price <= 0) continue
 
-        await (supabase as any)
-          .schema('batchfolio')
-          .from('holding_snapshots')
-          .upsert({
-            user_id: uid,
-            holding_id: holding.id,
-            ticker: holding.ticker,
-            price,
-            market_value: holding.shares * price,
-            date: today,
-          }, { onConflict: 'holding_id,date' })
+        holdingSnapshotRows.push({
+          user_id: uid,
+          holding_id: holding.id,
+          ticker: holding.ticker,
+          price,
+          market_value: holding.shares * price,
+          date: today,
+        })
       }
+
+      const snapshotErrors: string[] = []
+      const accountSnapErr = await upsertRows(supabase, 'account_snapshots', accountSnapshotRows, 'account_id,date')
+      if (accountSnapErr) snapshotErrors.push(`account_snapshots: ${accountSnapErr}`)
+      const holdingSnapErr = await upsertRows(supabase, 'holding_snapshots', holdingSnapshotRows, 'holding_id,date')
+      if (holdingSnapErr) snapshotErrors.push(`holding_snapshots: ${holdingSnapErr}`)
+      if (snapshotErrors.length > 0) throw new Error(snapshotErrors.join('; '))
 
       results.push({ uid, ok: true })
     } catch (err) {
       results.push({ uid, ok: false, error: String(err) })
     }
+  }
+
+  // Metadata refreshes run only now that every snapshot is written, and only inside the run budget
+  try {
+    await refreshMetadata(run, supabase, finnhubKey, runDeadline)
+  } catch (err) {
+    console.error('[nightly] Security metadata refresh failed:', (err as Error)?.name)
   }
 
   const processed = results.filter((r) => r.ok && !r.skipped).length
@@ -846,11 +1022,28 @@ Deno.serve(async (req) => {
     finnhubCalls: run.finnhubCalls,
     finnhub429s: run.finnhub429s,
     quoteFallbacks: run.quoteFallbacks,
+    budgetExceeded,
+    syncFailed,
+    metadataRefreshed: run.metadataRefreshed,
     metadataDeferred: run.metadataDeferred.size,
   }))
 
+  await finishRunRow({
+    processed,
+    skipped,
+    failed,
+    budget_exceeded: budgetExceeded,
+    notes: JSON.stringify({
+      finnhub429s: run.finnhub429s,
+      quoteFallbacks: run.quoteFallbacks,
+      syncFailed,
+      metadataRefreshed: run.metadataRefreshed,
+      metadataDeferred: run.metadataDeferred.size,
+    }),
+  })
+
   return new Response(
-    JSON.stringify({ date: today, processed, skipped, failed, results }),
+    JSON.stringify({ date: today, processed, skipped, failed, budgetExceeded, results }),
     { headers: { 'Content-Type': 'application/json' } },
   )
 })
