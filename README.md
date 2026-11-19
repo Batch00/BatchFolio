@@ -66,7 +66,7 @@ The app uses a data-terminal aesthetic -- dark slate background (`#0d1117`) with
 - Synced mutual funds show SimpleFIN NAV data instead of Finnhub
 
 ### Other
-- Nightly net worth snapshot via Edge Function (runs 6AM UTC)
+- Nightly net worth snapshot via Edge Function (runs 23:00 UTC)
 - Invite-only access with admin invite management
 - Demo mode with pre-loaded read-only data (resets nightly)
 - Installable PWA for mobile
@@ -157,6 +157,7 @@ All tables live in the `batchfolio` schema. RLS is enabled on every table.
 | `watchlist` | `user_id`, `ticker`, `added_at` -- unique on `(user_id, ticker)` |
 | `transactions` | `account_id`, `user_id`, `simplefin_id`, `amount`, `description`, `posted_at`, `tx_type`, `category`, `liability_id` |
 | `simplefin_connections` | `user_id`, `access_url`, `last_synced_at`, `connection_errors`. The browser role can read only `user_id`, `last_synced_at` and `connection_errors` on its own row and cannot write; `access_url` is read and written only server-side with the service role |
+| `snapshot_runs` | `started_at`, `finished_at`, `run_date`, `processed`, `skipped`, `failed`, `budget_exceeded`, `duration_ms`, `finnhub_calls`, `notes`. One row per nightly-snapshot run, counts only. Service role only (RLS on, no policies) |
 
 RLS policies restrict all reads and writes to `auth.uid() = user_id`. Holdings join to `accounts` to verify ownership since they do not have a direct `user_id` column.
 
@@ -186,11 +187,19 @@ The Access URL is never exposed to the client. All SimpleFIN requests go through
 
 Runs at 23:00 UTC via pg_cron. Requests must send an `x-cron-secret` header matching `CRON_SECRET`.
 
-1. Syncs SimpleFIN for all connected users
+For each user, one at a time:
+
+1. Syncs SimpleFIN within a time budget: 60s per user, and no sync continues past 120s from the start of the run. A user whose budget runs out is logged as `[nightly] sync budget exceeded` with how many accounts were synced
 2. Fetches live prices from Finnhub for manual holdings
 3. Calculates net worth = synced account balances + manual holdings value - liabilities
-4. Upserts a `net_worth_snapshots` row for each user
-5. Skips the demo user
+4. Upserts that user's `net_worth_snapshots`, `account_snapshots` and `holding_snapshots` rows. This always runs, even when the sync failed or timed out; it then uses the stored balances and holdings
+
+Then, after every user's snapshot is written:
+
+5. Refreshes security metadata (name, security type) from Finnhub for holdings that are due, once per ticker and at most 20 tickers, and only while the run is inside its 120s budget. The rest wait for a later night. Each ticker's refresh interval is fixed between 5 and 9 days so holdings do not all come due on the same night
+6. Records the run in `batchfolio.snapshot_runs` (a row is inserted at the start and updated at the end, so a row with no `finished_at` is a run that was killed)
+
+The demo user is skipped. Transactions, holdings and snapshots are written in batched upserts, not one row per call.
 
 | | |
 |---|---|
