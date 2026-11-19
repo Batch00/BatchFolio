@@ -61,6 +61,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 const METADATA_TTL_MIN_MS = 5 * DAY_MS
 const METADATA_TTL_SPREAD_MS = 4 * DAY_MS
 const FINNHUB_SPACING_MS = 1000
+const FINNHUB_TIMEOUT_MS = 5000
 const METADATA_REFRESH_BUDGET = 20
 // Time a single user's SimpleFIN sync may take before it stops and the snapshot is written
 const SYNC_BUDGET_MS = 60_000
@@ -128,7 +129,9 @@ function newRun(): Run {
 
 // Every Finnhub call in this function goes through here. Calls wait their turn in a queue
 // and start at least FINNHUB_SPACING_MS after the previous call started, parallel callers too.
-// Throws on a non-2xx response with the HTTP status on err.status.
+// Throws on a non-2xx response with the HTTP status on err.status. Each call is aborted after
+// FINNHUB_TIMEOUT_MS and then throws with no status, like a network error, so a hung call
+// cannot push the run past the time limit.
 async function finnhubFetch(run: Run, path: string, finnhubKey: string): Promise<any> {
   const turn = finnhubQueue.then(async () => {
     const wait = lastFinnhubStart + FINNHUB_SPACING_MS - Date.now()
@@ -138,7 +141,9 @@ async function finnhubFetch(run: Run, path: string, finnhubKey: string): Promise
   finnhubQueue = turn
   await turn
   run.finnhubCalls++
-  const res = await fetch(`https://finnhub.io/api/v1${path}&token=${finnhubKey}`)
+  const res = await fetch(`https://finnhub.io/api/v1${path}&token=${finnhubKey}`, {
+    signal: AbortSignal.timeout(FINNHUB_TIMEOUT_MS),
+  })
   if (res.status === 429) run.finnhub429s++
   if (!res.ok) throw Object.assign(new Error(`Finnhub error ${res.status}`), { status: res.status })
   return res.json()
@@ -177,9 +182,11 @@ async function lookupSecurityMetadata(run: Run, ticker: string, finnhubKey: stri
       console.error('Security metadata rate limited, retrying next run:', ticker)
       return { kind: 'rateLimited' }
     }
-    // Never log the error message: a network error's message includes the URL with the token
+    // Never log the error message: a network error's message includes the URL with the token.
+    // A timeout counts as failed, not rate limited.
     const status = (err as any).status
-    console.error('Security metadata error, not retrying until the TTL passes:', ticker, status ? `HTTP ${status}` : 'network error')
+    const reason = status ? `HTTP ${status}` : (err as Error)?.name === 'TimeoutError' ? 'timeout' : 'network error'
+    console.error('Security metadata error, not retrying until the TTL passes:', ticker, reason)
     return { kind: 'failed' }
   }
 }
