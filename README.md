@@ -66,7 +66,7 @@ The app uses a data-terminal aesthetic -- dark slate background (`#0d1117`) with
 - Synced mutual funds show SimpleFIN NAV data instead of Finnhub
 
 ### Other
-- Nightly net worth snapshot via Edge Function (runs 23:00 UTC)
+- Nightly net worth snapshot via Edge Function (runs 23:00 UTC, retry at 23:30 UTC)
 - Invite-only access with admin invite management
 - Demo mode with pre-loaded read-only data (resets nightly)
 - Installable PWA for mobile
@@ -185,11 +185,11 @@ The Access URL is never exposed to the client. All SimpleFIN requests go through
 
 ### nightly-snapshot
 
-Runs at 23:00 UTC via pg_cron. Requests must send an `x-cron-secret` header matching `CRON_SECRET`.
+Runs at 23:00 UTC via pg_cron, and again at 23:30 UTC from a second job (`nightly-snapshot-retry`) in case the first sync timed out. Requests must send an `x-cron-secret` header matching `CRON_SECRET`.
 
 For each user, one at a time:
 
-1. Syncs SimpleFIN within a time budget: 60s per user, and no sync continues past 120s from the start of the run. A user whose budget runs out is logged as `[nightly] sync budget exceeded` with how many accounts were synced
+1. Syncs SimpleFIN within a time budget: 100s per user, and no sync continues past 135s from the start of the run. A user whose budget runs out is logged as `[nightly] sync budget exceeded` with how many accounts were synced, and a SimpleFIN request that runs out as `[nightly] SimpleFIN request timed out after Ns`. A user synced within the last hour (by an earlier run or the Sync Now button) is not synced again, so the 23:30 retry only syncs when the 23:00 run did not. An account whose connection needs re-auth (a SimpleFIN error for it, an empty balance, or an older balance date than stored) keeps its stored balance, holdings and cash and is logged as `[nightly] skipped account needing attention`; the Sync Now route does the same
 2. Fetches live prices from Finnhub for manual holdings
 3. Calculates net worth = synced account balances + manual holdings value - liabilities
 4. Upserts that user's `net_worth_snapshots`, `account_snapshots` and `holding_snapshots` rows. This always runs, even when the sync failed or timed out; it then uses the stored balances and holdings
@@ -203,7 +203,7 @@ The demo user is skipped. Transactions, holdings and snapshots are written in ba
 
 | | |
 |---|---|
-| **Schedule** | `0 23 * * *` (23:00 UTC) |
+| **Schedule** | `0 23 * * *` (23:00 UTC), retry `30 23 * * *` (23:30 UTC) |
 | **Required secrets** | `FINNHUB_API_KEY`, `APP_SUPABASE_URL`, `SERVICE_ROLE_KEY`, `CRON_SECRET`, `DEMO_USER_ID` |
 
 ### reset-demo
@@ -226,7 +226,7 @@ CRON_SECRET=long_random_value
 DEMO_USER_ID=uuid-of-demo-user
 ```
 
-`nightly-snapshot` is scheduled by a pg_cron job (`0 23 * * *`) that sends both its `Authorization` header and an `x-cron-secret` header.
+`nightly-snapshot` is scheduled by two pg_cron jobs (`0 23 * * *`, and `nightly-snapshot-retry` at `30 23 * * *`, see `supabase/manual/2026-11-23_nightly_snapshot_retry.sql`) that send both its `Authorization` header and an `x-cron-secret` header.
 
 ---
 

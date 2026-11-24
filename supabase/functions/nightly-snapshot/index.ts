@@ -1,7 +1,10 @@
 // Deploy with:
 // supabase functions deploy nightly-snapshot
-// Runs nightly at 23:00 UTC from a pg_cron job (cron: 0 23 * * *).
-// The job must send an x-cron-secret header matching CRON_SECRET.
+// Runs nightly at 23:00 UTC from a pg_cron job (cron: 0 23 * * *), and again at 23:30 UTC
+// from the nightly-snapshot-retry job (cron: 30 23 * * *, see
+// supabase/manual/2026-11-23_nightly_snapshot_retry.sql). The retry skips the sync when the
+// first run already synced within SYNC_FRESH_MS, and redoes it when the first run timed out.
+// Both jobs must send an x-cron-secret header matching CRON_SECRET.
 // Required secrets: FINNHUB_API_KEY, APP_SUPABASE_URL,
 // SERVICE_ROLE_KEY, CRON_SECRET, DEMO_USER_ID (optional - skips demo user)
 //
@@ -63,11 +66,16 @@ const METADATA_TTL_SPREAD_MS = 4 * DAY_MS
 const FINNHUB_SPACING_MS = 1000
 const FINNHUB_TIMEOUT_MS = 5000
 const METADATA_REFRESH_BUDGET = 20
-// Time a single user's SimpleFIN sync may take before it stops and the snapshot is written
-const SYNC_BUDGET_MS = 60_000
+// Time a single user's SimpleFIN sync may take before it stops and the snapshot is written.
+// SimpleFIN can take over 60s to answer, so most of the run is given to it.
+const SYNC_BUDGET_MS = 100_000
 // Time from the start of the run after which no sync continues and no metadata refresh starts.
-// Snapshots are still written after it.
-const RUN_BUDGET_MS = 120_000
+// Snapshots are still written after it. Kept well under the 150s Edge Function limit.
+const RUN_BUDGET_MS = 135_000
+// A user synced within this long (by this function or the Sync Now button) is not synced
+// again. Matches SYNC_RATE_LIMIT_MS in app/api/simplefin/sync/route.js, and makes the
+// 23:30 UTC retry job skip the sync when the 23:00 run already did it.
+const SYNC_FRESH_MS = 60 * 60 * 1000
 const UPSERT_CHUNK_SIZE = 500
 let finnhubQueue: Promise<void> = Promise.resolve()
 let lastFinnhubStart = 0
@@ -112,6 +120,7 @@ type Run = {
   finnhubCalls: number
   finnhub429s: number
   quoteFallbacks: number
+  accountsNeedingAttention: number
 }
 
 function newRun(): Run {
@@ -124,6 +133,7 @@ function newRun(): Run {
     finnhubCalls: 0,
     finnhub429s: 0,
     quoteFallbacks: 0,
+    accountsNeedingAttention: 0,
   }
 }
 
@@ -331,13 +341,41 @@ function transactionRows(sfTransactions: SfTransaction[], base: Record<string, s
 
 class SyncBudgetExceeded extends Error {}
 
+type SfError = { code?: string; msg?: string; message?: string; conn_id?: string; account_id?: string }
+
+// Mirrors simplefinAccountSkipReason in lib/simplefin.js - keep in sync.
+// Returns why an account SimpleFIN returned should keep its stored data this sync, or null to
+// sync it. A connection that needs re-auth (RBC does every so often) can come back with an
+// error, an empty balance or an old balance date. Writing that would zero the balance, delete
+// its holdings as sold or rewrite its cash, so the stored data is kept until it works again.
+// stored is the account's current row, or null when it is new or a credit card.
+function simplefinAccountSkipReason(
+  sfAcc: { id: string; conn_id?: string; balance?: string; 'balance-date'?: number },
+  errors: SfError[],
+  stored: { balance?: number | null; last_balance_date?: string | null } | null,
+): string | null {
+  const hasError = errors.some((e) =>
+    (e.account_id && e.account_id === sfAcc.id) ||
+    (e.conn_id && sfAcc.conn_id && e.conn_id === sfAcc.conn_id))
+  if (hasError) return 'connection error'
+  if (!stored) return null
+  const balance = parseFloat(sfAcc.balance ?? '')
+  if (Number(stored.balance) > 0 && (!Number.isFinite(balance) || balance === 0)) return 'empty balance'
+  const newDate = sfAcc['balance-date'] ? sfAcc['balance-date'] * 1000 : null
+  if (newDate && stored.last_balance_date && newDate < new Date(stored.last_balance_date).getTime()) {
+    return 'older balance date'
+  }
+  return null
+}
+
 type SyncOutcome = {
-  status: 'none' | 'ok' | 'failed' | 'budget'
+  status: 'none' | 'ok' | 'failed' | 'budget' | 'fresh'
   accountsDone: number
   accountsTotal: number
 }
 
-// Syncs one user's SimpleFIN data. Stops with status 'budget' once Date.now() passes
+// Syncs one user's SimpleFIN data. Returns status 'fresh' without syncing when the user was
+// synced within SYNC_FRESH_MS. Stops with status 'budget' once Date.now() passes
 // deadline: checked before the request, between accounts, and on the request itself.
 // Never throws for a sync problem, so the caller can always go on to the snapshot.
 async function syncSimpleFINForUser(
@@ -352,11 +390,15 @@ async function syncSimpleFINForUser(
   }
 
   const { data: conn } = await (supabase as any).schema('batchfolio').from('simplefin_connections')
-    .select('access_url')
+    .select('access_url, last_synced_at')
     .eq('user_id', uid)
     .maybeSingle()
 
   if (!conn?.access_url) return progress
+
+  if (conn.last_synced_at && Date.now() - new Date(conn.last_synced_at).getTime() < SYNC_FRESH_MS) {
+    return { ...progress, status: 'fresh' }
+  }
 
   // Refuse to send credentials anywhere but a SimpleFIN host. Never log the URL itself.
   if (!isSimplefinUrl(conn.access_url)) {
@@ -375,6 +417,7 @@ async function syncSimpleFINForUser(
     // Fetch 90 days of data including transactions. The request is aborted at the deadline.
     const startDate = Math.floor((Date.now() - 90 * 24 * 60 * 60 * 1000) / 1000)
     let sfData: any
+    const requestStart = Date.now()
     try {
       const sfRes = await fetch(`${baseUrl}/accounts?version=2&start-date=${startDate}`, {
         headers: { Authorization: `Basic ${credentials}` },
@@ -387,14 +430,16 @@ async function syncSimpleFINForUser(
       sfData = await sfRes.json()
     } catch (err) {
       const name = (err as Error)?.name
-      if (name === 'TimeoutError' || name === 'AbortError') throw new SyncBudgetExceeded()
+      if (name === 'TimeoutError' || name === 'AbortError') {
+        console.error('[nightly] SimpleFIN request timed out after', `${Math.round((Date.now() - requestStart) / 1000)}s`, 'for', uid)
+        throw new SyncBudgetExceeded()
+      }
       // Never pass the fetch error on: its message can include the SimpleFIN URL
       throw new Error('SimpleFIN request failed')
     }
 
     // Parse connection errors from SimpleFIN response
-    const sfErrors: { code?: string; msg?: string; message?: string; conn_id?: string }[] =
-      sfData.errlist ?? sfData.errors ?? []
+    const sfErrors: SfError[] = sfData.errlist ?? sfData.errors ?? []
     const connectionErrors = sfErrors
       .filter((e) => e.code && (e.msg || e.message))
       .map((e) => ({
@@ -406,6 +451,7 @@ async function syncSimpleFINForUser(
 
     const sfAccounts: {
       id: string
+      conn_id?: string
       name: string
       balance?: string
       'available-balance'?: string
@@ -433,6 +479,11 @@ async function syncSimpleFINForUser(
 
       // Route credit cards to liabilities + sync transactions via shadow account
       if (isCreditCardAccount(sfAcc.name, sfAcc.balance)) {
+        if (simplefinAccountSkipReason(sfAcc, sfErrors, null)) {
+          run.accountsNeedingAttention++
+          console.log('[nightly] skipped account needing attention:', sfAcc.id, 'connection error')
+          continue
+        }
         const balanceAbs = Math.abs(parseFloat(sfAcc.balance ?? '0') || 0)
         try {
           // 1. Upsert liability
@@ -519,10 +570,18 @@ async function syncSimpleFINForUser(
 
       // Preserve user-edited names: check before update, never overwrite name
       const { data: existingAcc } = await (supabase as any).schema('batchfolio').from('accounts')
-        .select('id, type')
+        .select('id, type, balance, last_balance_date')
         .eq('user_id', uid)
         .eq('simplefin_id', sfAcc.id)
         .maybeSingle()
+
+      // Keep an account's stored balance, holdings and cash while its connection needs re-auth
+      const skipReason = simplefinAccountSkipReason(sfAcc, sfErrors, existingAcc ?? null)
+      if (skipReason) {
+        run.accountsNeedingAttention++
+        console.log('[nightly] skipped account needing attention:', sfAcc.id, skipReason)
+        continue
+      }
 
       const newType = detectAccountType(sfAcc.name, sfAcc.org?.name)
       let accountId: string | null = null
@@ -826,6 +885,7 @@ Deno.serve(async (req) => {
   const results: { uid: string; ok: boolean; skipped?: boolean; error?: string }[] = []
   let budgetExceeded = 0
   let syncFailed = 0
+  let syncFresh = 0
 
   for (const uid of userIds) {
     // Skip demo user - their snapshot history is seeded and should not be overwritten
@@ -841,6 +901,7 @@ Deno.serve(async (req) => {
       const outcome = await syncSimpleFINForUser(run, supabase, uid, Math.min(Date.now() + SYNC_BUDGET_MS, runDeadline))
       if (outcome.status === 'budget') budgetExceeded++
       if (outcome.status === 'failed') syncFailed++
+      if (outcome.status === 'fresh') syncFresh++
     } catch (err) {
       syncFailed++
       console.error('[nightly] SimpleFIN sync failed for', uid, String(err))
@@ -1031,6 +1092,8 @@ Deno.serve(async (req) => {
     quoteFallbacks: run.quoteFallbacks,
     budgetExceeded,
     syncFailed,
+    syncFresh,
+    accountsNeedingAttention: run.accountsNeedingAttention,
     metadataRefreshed: run.metadataRefreshed,
     metadataDeferred: run.metadataDeferred.size,
   }))
@@ -1044,6 +1107,8 @@ Deno.serve(async (req) => {
       finnhub429s: run.finnhub429s,
       quoteFallbacks: run.quoteFallbacks,
       syncFailed,
+      syncFresh,
+      accountsNeedingAttention: run.accountsNeedingAttention,
       metadataRefreshed: run.metadataRefreshed,
       metadataDeferred: run.metadataDeferred.size,
     }),
