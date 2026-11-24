@@ -201,8 +201,10 @@ SimpleFIN syncs real bank/brokerage balances and transactions via a user-provide
 ## Edge Functions
 
 **`nightly-snapshot`** (Supabase Edge Function):
-- Triggered nightly at 23:00 UTC via `pg_cron` (cron: `0 23 * * *`)
-- For each user: syncs SimpleFIN within `SYNC_BUDGET_MS` (60s per user, and nothing past `RUN_BUDGET_MS`, 120s from the start of the run), then always upserts the net worth, account and holding snapshots from the stored balances and holdings. A sync failure or timeout must never skip the snapshot
+- Triggered nightly at 23:00 UTC via `pg_cron` (cron: `0 23 * * *`), and again at 23:30 UTC by the `nightly-snapshot-retry` job (cron: `30 23 * * *`) in case the first sync timed out
+- For each user: syncs SimpleFIN within `SYNC_BUDGET_MS` (100s per user, and nothing past `RUN_BUDGET_MS`, 135s from the start of the run; SimpleFIN can take over 60s), then always upserts the net worth, account and holding snapshots from the stored balances and holdings. A sync failure or timeout must never skip the snapshot
+- A user synced within `SYNC_FRESH_MS` (1 hour, same as the Sync Now rate limit) is not synced again, so the 23:30 retry only syncs when the 23:00 run did not
+- Accounts whose connection needs re-auth (RBC does every so often) must never be zeroed or emptied: `simplefinAccountSkipReason` (in `lib/simplefin.js`, mirrored in the function) keeps an account's stored balance, holdings and cash when SimpleFIN returns an error for it, an empty balance or an older balance date. Both the nightly function and `/api/simplefin/sync` use it
 - Finnhub metadata refreshes run after every user's snapshot is written, once per ticker, only while the run budget lasts. The metadata TTL is 5-9 days per ticker (`metadataTtlMs`, mirrored in `lib/security-metadata.js`)
 - Transactions, holdings and snapshots are written in batched array upserts (chunks of 500). Every row in one batch must have the same keys, because supabase-js nulls a column a row leaves out
 - Records each run in `batchfolio.snapshot_runs` (insert at start, update at end) and logs a `[nightly] Run summary` line

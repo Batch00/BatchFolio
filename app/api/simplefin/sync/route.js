@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolveHoldingMetadata } from '@/lib/security-metadata'
-import { isSimplefinUrl } from '@/lib/simplefin'
+import { isSimplefinUrl, simplefinAccountSkipReason } from '@/lib/simplefin'
 
 // Required SQL migrations (run in Supabase SQL editor):
 // ALTER TABLE batchfolio.accounts DROP CONSTRAINT IF EXISTS accounts_type_check;
@@ -141,6 +141,7 @@ export async function POST() {
     let failedHoldings = 0
     let failedTransactions = 0
     let failedAccounts = 0
+    let skippedAccounts = 0
 
     for (const sfAcc of sfAccounts) {
      try {
@@ -148,6 +149,11 @@ export async function POST() {
       // Requires: ALTER TABLE batchfolio.liabilities ADD COLUMN IF NOT EXISTS simplefin_id text UNIQUE;
       //           ALTER TABLE batchfolio.liabilities ADD COLUMN IF NOT EXISTS is_synced boolean DEFAULT false;
       if (isCreditCardAccount(sfAcc.name, sfAcc.balance)) {
+        if (simplefinAccountSkipReason(sfAcc, sfErrors, null)) {
+          skippedAccounts++
+          console.log('Skipped account needing attention:', sfAcc.id, 'connection error')
+          continue
+        }
         const balanceAbs = Math.abs(parseFloat(sfAcc.balance) || 0)
         try {
           // 1. Upsert liability
@@ -258,10 +264,18 @@ export async function POST() {
       // update provider/type/is_synced on subsequent syncs without touching name.
       const { data: existingAcc } = await supabase
         .from('accounts')
-        .select('id, type')
+        .select('id, type, balance, last_balance_date')
         .eq('user_id', user.id)
         .eq('simplefin_id', sfAcc.id)
         .maybeSingle()
+
+      // Keep an account's stored balance, holdings and cash while its connection needs re-auth
+      const skipReason = simplefinAccountSkipReason(sfAcc, sfErrors, existingAcc ?? null)
+      if (skipReason) {
+        skippedAccounts++
+        console.log('Skipped account needing attention:', sfAcc.id, skipReason)
+        continue
+      }
 
       const balanceNum = parseFloat(sfAcc.balance) || 0
       const availableBalanceNum = parseFloat(sfAcc['available-balance']) || 0
@@ -538,7 +552,7 @@ export async function POST() {
       })
       .eq('user_id', user.id)
 
-    return Response.json({ success: true, accountsSynced, holdingsSynced, transactionsSynced, failedHoldings, failedTransactions, failedAccounts })
+    return Response.json({ success: true, accountsSynced, holdingsSynced, transactionsSynced, failedHoldings, failedTransactions, failedAccounts, skippedAccounts })
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 })
   }
